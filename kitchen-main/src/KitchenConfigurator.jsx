@@ -2,14 +2,10 @@ import { Perf } from 'r3f-perf';
 import React, { useMemo, useRef, useState, useEffect } from "react";
 import { Canvas } from "@react-three/fiber";
 import { OrbitControls, Environment, ContactShadows } from "@react-three/drei";
-import { Plane, Vector3 } from "three";
 import * as THREE from "three";
 
 import "./kitchen.css";
-import ModuleBox from "./components/ModuleBox";
-import UpperCabinet from "./components/UpperCabinet";
-import Countertop from "./components/Countertop";
-import RangeHood from "./components/RangeHood";
+
 import {
   MODULE_CATALOG, FACADE_OPTIONS, COUNTERTOPS,
   COUNTERTOP_SWATCHES, CARCASS_OPTIONS, CUT_W, CUT_D
@@ -144,118 +140,6 @@ export default function KitchenConfigurator() {
   const upperRowW = Math.max(0, upperX1 - upperX0);
 
   // === drag по Canvas ===
-  const GROUND = new Plane(new Vector3(0, 1, 0), 0);
-  const TMP = new Vector3();
-  const groupRef = useRef();
-  const [drag, setDrag] = useState(null);
-  const GRID = 0.1;
-  const dragIndex = useRef(null); // для HTML DnD у списку
-
-  const worldToLocalX = (e) => {
-    const wp = e.point ?? e.ray?.intersectPlane(GROUND, TMP);
-    if (!wp || !groupRef.current) return null;
-    const p = wp.clone(); groupRef.current.worldToLocal(p); return p.x;
-  };
-  const snap = (x) => Math.round(x / GRID) * GRID;
-  const clamp = (x, min, max) => Math.max(min, Math.min(max, x));
-
-  const onStartDrag = (e, iBase, module) => {
-    e.stopPropagation();
-    e.currentTarget.setPointerCapture?.(e.pointerId);
-    if (module.isFiller || iBase == null) return;
-
-    const xLocal = worldToLocalX(e); if (xLocal == null) return;
-
-    const basePositions = positions.filter(p => !p.module.isFiller);
-    const left   = basePositions[iBase].x;
-    const center = left + module.width / 2;
-    const offset = xLocal - center;
-
-    setDrag({ i: iBase, width: module.width, offset, x: left });
-    document.body.style.cursor = "grabbing";
-  };
-
-  const onMove = (e) => {
-    if (!drag) return;
-    const xLocal = worldToLocalX(e); if (xLocal == null) return;
-    let x = xLocal - drag.offset - drag.width / 2;
-    x = clamp(x, -drag.width / 2, Math.max(0, total - drag.width / 2));
-    setDrag((d) => ({ ...d, x: snap(x) }));
-  };
-
-  const onEnd = (e) => {
-    if (!drag) return;
-    e?.stopPropagation?.();
-    e?.currentTarget?.releasePointerCapture?.(e.pointerId);
-
-    const basePositions = positions.filter(p => !p.module.isFiller);
-    const leftFallback = basePositions[drag.i]?.x ?? 0;
-    const left = Number.isFinite(drag.x) ? drag.x : leftFallback;
-    const draggedCenter = left + drag.width / 2;
-
-    const centers = basePositions.map((p, idx) =>
-      idx === drag.i ? draggedCenter : p.x + p.module.width / 2
-    );
-    let rawIndex = centers.filter(c => c < draggedCenter).length;
-    let insertIndex = rawIndex;
-    if (insertIndex > drag.i) insertIndex -= 1;
-    insertIndex = Math.max(0, Math.min(insertIndex, centers.length - 1));
-
-    setModules(prev => {
-      const base = prev.filter(m => !m.isFiller);
-      const arr = base.slice();
-      const [item] = arr.splice(drag.i, 1);
-      arr.splice(insertIndex, 0, item);
-      return arr; // fillers перерахує computePlan
-    });
-
-    setDrag(null);
-    document.body.style.cursor = "auto";
-  };
-
-  useEffect(() => {
-    if (!drag) return;
-    const handler = (ev) => onEnd(ev);
-    window.addEventListener("pointerup", handler);
-    window.addEventListener("pointercancel", handler);
-    return () => {
-      window.removeEventListener("pointerup", handler);
-      window.removeEventListener("pointercancel", handler);
-    };
-  }, [drag]);
-
-  // UI helpers
-  const addModule = (id) => {
-    const mod = MODULE_CATALOG.find(m => m.id === id);
-    if (!mod) return;
-    setModules(prev => [...prev, mod]);
-  };
-  const removeLast = () => setModules(prev => prev.slice(0, -1));
-  const reset = () => setModules([MODULE_CATALOG[0], MODULE_CATALOG[4], MODULE_CATALOG[2]]);
-
-  // HTML5 DnD у списку (повернули)
-  function onDragStartList(e, index) {
-    dragIndex.current = index;
-    e.dataTransfer.effectAllowed = "move";
-  }
-  function onDragOverList(e) {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = "move";
-  }
-  function onDropList(e, index) {
-    e.preventDefault();
-    const from = dragIndex.current;
-    if (from === null || from === index) return;
-    setModules(prev => {
-      const baseOnly = prev.filter(m => !m.isFiller);
-      const arr = baseOnly.slice();
-      const [item] = arr.splice(from, 1);
-      arr.splice(index, 0, item);
-      return arr; // fillers перерахуються в computePlan
-    });
-    dragIndex.current = null;
-  }
-
   const [three, setThree] = useState(null);
 
   return (
@@ -263,23 +147,7 @@ export default function KitchenConfigurator() {
       {/* Панель керування */}
       <div className="panel">
         <h1>Kitchen Configurator</h1>
-        <p className="muted">Нижні модулі + верхні шафи, витяжка, DnD; суцільна текстура по рядах.</p>
-
-        <div className="row">
-          <label>Target length: <b>{targetLength.toFixed(2)} m</b></label>
-          <input
-            type="range"
-            min="2"
-            max="5"
-            step="0.01"
-            value={targetLength}
-            onChange={e => setTargetLength(parseFloat(e.target.value))}
-          />
-          <div className="hint">
-            Current lineup: <b>{total.toFixed(2)} m</b>{" "}
-            {delta > 0 ? `( +${delta.toFixed(2)} m via fillers )` : `(fits)`}
-          </div>
-        </div>
+        <p></p>
 
         {/* Акордеон: корпус / фасад / стільниця */}
         <AccordionSection
@@ -323,60 +191,6 @@ export default function KitchenConfigurator() {
         >
           <SwatchPicker options={COUNTERTOP_SWATCHES} value={countertopId} onChange={setCountertopId} />
         </AccordionSection>
-
-        {/* Тумблери */}
-        <div className="row two" style={{marginTop:8}}>
-          <label className="toggle-switch">
-            <input type="checkbox" checked={useDesignerModel} onChange={e=>setUseDesignerModel(e.target.checked)} />
-            <span className="ts-slider" />
-            <span className="ts-label">Use designer GLB</span>
-          </label>
-        </div>
-        <div className="row two" style={{ marginTop: 12 }}>
-          <label className="toggle-switch">
-            <input type="checkbox" checked={showUpper} onChange={e => setShowUpper(e.target.checked)} />
-            <span className="ts-slider" />
-            <span className="ts-label">Show upper cabinets</span>
-          </label>
-          <label className="toggle-switch">
-            <input type="checkbox" checked={showHood} onChange={e => setShowHood(e.target.checked)} />
-            <span className="ts-slider" />
-            <span className="ts-label">Show range hood</span>
-          </label>
-        </div>
-
-        {/* Бібліотека модулів */}
-        <div className="row">
-          <label>Add module</label>
-          <div className="mods">
-            {MODULE_CATALOG.filter(m => !m.isFiller).map(m => (
-              <button key={m.id} onClick={() => addModule(m.id)}>{m.name}</button>
-            ))}
-          </div>
-          <div className="mods">
-            <button onClick={removeLast}>Remove last</button>
-            <button onClick={reset}>Reset</button>
-          </div>
-        </div>
-
-        {/* DnD список для перестановки */}
-        <div className="row">
-          <label>Reorder (drag & drop)</label>
-          <ul className="dnd">
-            {modules.filter(m => !m.isFiller).map((m, i) => (
-              <li
-                key={`${m.id}-${i}`}
-                draggable
-                onDragStart={(e)=>onDragStartList(e,i)}
-                onDragOver={onDragOverList}
-                onDrop={(e)=>onDropList(e,i)}
-              >
-                <span className="tag">{m.width.toFixed(2)}m</span> {m.name}
-              </li>
-            ))}
-          </ul>
-          <div className="hint">Перетягни елементи у списку, щоб змінити порядок модулів нижнього ряду.</div>
-        </div>
 
         {/* Ціна */}
         <Price
@@ -428,67 +242,17 @@ export default function KitchenConfigurator() {
               position={[0, 0, 0]}
             />
           </group>
-
-          {useDesignerModel ? (
-            // ===== РЕНДЕР ДИЗАЙНЕРСЬКОГО GLB =====
-            <DesignerKitchen
-              url="/assets/kitchen/Kitchen 3.glb"
-              // якщо з Max у см: масштаб нижче
-              // scale={[0.01, 0.01, 0.01]}
-              scale={[1,1,1]}
-              position={[0,0,0]}
-            />
-          ) : (
-            // ===== СТАРА ПРОЦЕДУРНА КУХНЯ =====
-            <group
-              ref={groupRef}
-              position={[-total / 2, 0, 0]}
-              onPointerMove={onMove}
-              onPointerUp={onEnd}
-              onPointerCancel={onEnd}
-            >
-              {positions.map(({ module, x, baseIndex }, i) => (
-                <ModuleBox
-                  key={`${module.id}-${i}`}
-                  posX={drag && baseIndex !== null && drag.i === baseIndex ? drag.x : x}
-                  module={module}
-                  facadeValue={facadeValue}
-                  matKey={facadeMatKey}
-                  finish={finish}
-                  rowW={total}
-                  onStartDrag={(e) => onStartDrag(e, baseIndex, module)}
-                  carcassHex={carcassHex}
-                />
-              ))}
-
-              <Countertop
-                length={total}
-                color={countertop?.hex}
-                cutout={sinkCenter ? { x: sinkCenter, w: CUT_W, d: CUT_D } : null}
-              />
-
-              {showUpper && uppers.map((u, idx) => (
-                <UpperCabinet
-                  key={`u-${idx}-${u.x.toFixed(3)}`}
-                  posX={u.x}
-                  width={u.width}
-                  facadeValue={facadeValue}
-                  matKey={facadeMatKey}
-                  finish={finish}
-                  isFirst={idx === 0}
-                  isLast={idx === uppers.length - 1}
-                  rowX0={upperX0}
-                  rowW={upperRowW}
-                  carcassHex={carcassHex}
-                />
-              ))}
-
-              {showHood && <RangeHood xCenter={hoodCenter} width={0.6} />}
-            </group>
-          )}
+          {/* ===== РЕНДЕР ДИЗАЙНЕРСЬКОГО GLB ===== */}
+          <DesignerKitchen
+            url="/assets/kitchen/Kitchen 3.glb"
+            // якщо з Max у см: масштаб нижче
+            // scale={[0.01, 0.01, 0.01]}
+            scale={[1,1,1]}
+            position={[0,0,0]}
+          />
 
           <ContactShadows position={[0, 0, 0]} opacity={0.25} width={8} height={8} blur={1.4} far={1.5} />
-          <OrbitControls makeDefault enabled={!drag} minPolarAngle={0} maxPolarAngle={1.8} target={[0, 0.95, 0]} />
+          <OrbitControls makeDefault minPolarAngle={0} maxPolarAngle={1.8} target={[0, 0.95, 0]} />
           <Perf position="top-right" minimal />   {/* FPS, мс/кадр, drawcalls/triangles */}
           <ExposeThree onReady={setThree} />
         </Canvas>
