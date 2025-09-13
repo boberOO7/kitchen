@@ -1,85 +1,117 @@
 // components/DesignerKitchen.jsx
-import React, { useEffect } from "react";
+import React, { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { useGLTF } from "@react-three/drei";
+import { useFrame } from "@react-three/fiber";
 
-/**
- * Допоміжні лоадери для PBR-карт:
- * - baseColor (sRGB)
- * - інші карти (linear)
- * glTF очікує flipY=false
- */
-const texLoader = new THREE.TextureLoader();
-function loadColor(url) {
-  const t = texLoader.load(url);
-  t.colorSpace = THREE.SRGBColorSpace;
-  t.flipY = false;
-  return t;
-}
-function loadLinear(url) {
-  const t = texLoader.load(url);
-  t.colorSpace = THREE.LinearSRGBColorSpace;
-  t.flipY = false;
-  return t;
-}
+// швидкі лоадери з правильним colorSpace/flipY для glTF
+const tl = new THREE.TextureLoader();
+const loadColor = (url) => { const t = tl.load(url); t.colorSpace = THREE.SRGBColorSpace; t.flipY = false; return t; };
+const loadLinear = (url) => { const t = tl.load(url); t.colorSpace = THREE.LinearSRGBColorSpace; t.flipY = false; return t; };
 
-/**
- * DesignerKitchen
- * @param {string} url - шлях до GLB
- * @param {object[]} materialMap - необовʼязковий масив відповідностей:
- *   [{
- *     matName: "Front_Wood",                // назва матеріалу в GLB
- *     baseColor: "/textures/wood_base.jpg", // опційно
- *     roughness: "/textures/wood_rough.jpg",
- *     metalness: "/textures/wood_metal.jpg",
- *     normal: "/textures/wood_normal.jpg",
- *     ao: "/textures/wood_ao.jpg"
- *   }, ...]
- * Інші пропси (position, scale, rotation…) передаються у <primitive/>
- */
+// overrides:
+// {
+//   sets: { // що обрано в UI
+//     facade: { base, rough, normal, ao, metal },
+//     top:    { ... },
+//     carcass:{ ... },
+//   },
+//   targetMats: { // до яких матів GLB це застосувати
+//     facade:  ["Front", "Door", "Facade Material"],
+//     top:     ["Counter", "Top Stone"],
+//     carcass: ["Carcass", "Box", "Side", "Shelf"]
+//   }
+// }
+// doors (необов’язково):
+//   [{ name: "Door_L", axis: "y", openRad: Math.PI/2 }]
 export default function DesignerKitchen({
-  url = "/assets/kitchen/Kitchen.glb",
-  materialMap = [],  // можна передати ззовні; якщо не передати — нічого не патчимо
+  url,
+  overrides,
+  doors = [],       // масив дверок за іменами мешів в GLB
   ...props
 }) {
   const { scene, materials } = useGLTF(url);
 
+  // 1) тіні
   useEffect(() => {
-    // Разовий список матеріалів для зручного мапінгу
-    if (process.env.NODE_ENV !== "production") {
-      const names = Object.keys(materials || {});
-      // eslint-disable-next-line no-console
-      console.log("GLB materials:", names);
-    }
+    scene.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+  }, [scene]);
 
-    // Патчимо матеріали, якщо передані мапінги
-    materialMap.forEach(p => {
-      const m = materials?.[p.matName];
-      if (!m) return;
+  // 2) репорт назв матеріалів (1 раз, щоб звірити з GLB)
+  useEffect(() => {
+    const names = Object.keys(materials ?? {});
+    console.log("GLB materials:", names);
+  }, [materials]);
 
-      if (p.baseColor)  m.map          = loadColor(p.baseColor);
-      if (p.roughness)  m.roughnessMap = loadLinear(p.roughness);
-      if (p.metalness)  m.metalnessMap = loadLinear(p.metalness);
-      if (p.normal)     m.normalMap    = loadLinear(p.normal);
-      if (p.ao)         m.aoMap        = loadLinear(p.ao);
+  // 3) підміна карт матеріалів згідно overrides
+  useEffect(() => {
+    if (!overrides?.sets || !overrides?.targetMats) return;
 
-      // невеличка поліровка PBR
-      m.needsUpdate = true;
-      m.envMapIntensity = 0.6;
-    });
+    const applySetToMat = (mat, set) => {
+      if (!mat || !set) return;
+      if (set.base)     mat.map          = loadColor(set.base);
+      if (set.rough)    mat.roughnessMap = loadLinear(set.rough);
+      if (set.metal)    mat.metalnessMap = loadLinear(set.metal);
+      if (set.normal)   mat.normalMap    = loadLinear(set.normal);
+      if (set.ao)       mat.aoMap        = loadLinear(set.ao);
+      mat.needsUpdate = true;
+      mat.envMapIntensity = 0.6;
+    };
 
-    // Тіні на всіх мешах
-    scene.traverse(o => {
-      if (o.isMesh) {
-        o.castShadow = true;
-        o.receiveShadow = true;
+    const { sets, targetMats } = overrides;
+
+    const patchBucket = (bucketKey) => {
+      const set  = sets[bucketKey];
+      const list = targetMats[bucketKey] || [];
+      list.forEach(name => {
+        const m = materials[name];
+        if (m) applySetToMat(m, set);
+      });
+    };
+
+    patchBucket("facade");
+    patchBucket("top");
+    patchBucket("carcass");
+  }, [materials, overrides]);
+
+  // 4) дверцята з кліком (спрацює, якщо в GLB правильно виставлено pivot на завісі)
+  //    Якщо pivot не на завісі в експорті — у DCC (3ds Max) треба виставити його перед експортом.
+  const doorState = useRef({});
+  const doorRefs  = useRef({});
+
+  // створюємо посилання на дверні вузли за іменем
+  useEffect(() => {
+    doors.forEach(d => {
+      const node = scene.getObjectByName(d.name);
+      if (node) {
+        doorRefs.current[d.name] = node;
+        if (doorState.current[d.name] == null) doorState.current[d.name] = 0; // 0 — закрито
+        // курсор/події
+        node.cursor = "pointer";
+        node.onPointerDown = (e) => { e.stopPropagation(); doorState.current[d.name] = doorState.current[d.name] ? 0 : 1; };
+      } else {
+        console.warn("Door node not found:", d.name);
       }
     });
-  }, [scene, materials, materialMap]);
+  }, [scene, doors]);
+
+  // анімація до цільового кута
+  useFrame((_, dt) => {
+    doors.forEach(d => {
+      const n = doorRefs.current[d.name];
+      if (!n) return;
+      const open = doorState.current[d.name] || 0;
+      const dst  = (d.axis === "x" ? [d.openRad, "x"] : d.axis === "z" ? [d.openRad, "z"] : [d.openRad, "y"]);
+      const axis = dst[1];
+      const target = open ? (d.openRad ?? Math.PI/2) : 0;
+      const cur = n.rotation[axis];
+      const diff = target - cur;
+      const step = Math.sign(diff) * Math.min(Math.abs(diff), dt * 5);
+      n.rotation[axis] = cur + step;
+    });
+  });
 
   return <primitive object={scene} {...props} />;
 }
 
-// (Опційно) попереднє завантаження.
-// Постав тут свій основний шлях до GLB, або додай ще один рядок із іншим шляхом.
-useGLTF.preload("/assets/kitchen/Kitchen.glb");
+useGLTF.preload("/assets/kitchen/kitchen-3.glb");
