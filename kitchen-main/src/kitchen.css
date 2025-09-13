@@ -1,0 +1,194 @@
+html, body, #root { height: 100%; margin: 0; font-family: system-ui, Arial, sans-serif; color: #222; }
+.wrap { display: grid; grid-template-columns: 420px minmax(0, 1fr); gap: 16px; width: 100vw; height: 100vh; box-sizing: border-box; padding: 16px; background: linear-gradient(#fafafa,#fff); }
+.panel { background: #fff; border: 1px solid #eee; border-radius: 12px; padding: 16px; overflow: auto; }
+.panel h1 { margin: 0 0 6px; font-size: 20px; }
+.muted { color:#666; margin: 0 0 12px; font-size: 13px; }
+.row { margin: 12px 0; display: flex; flex-direction: column; gap: 6px; }
+.row.two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: end; }
+.row label { font-size: 13px; color:#333; }
+.row input[type=range] { width: 100%; }
+.toggle label { margin-right: 10px; font-size: 13px; }
+.mods { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.mods button { padding: 8px; border-radius: 8px; border: 1px solid #ddd; background: #f6f6f6; cursor: pointer; color: #333; }
+.mods button:hover { background: #efefef; }
+.price { font-size: 14px; background:#fafafa; border:1px solid #eee; border-radius: 8px; padding: 10px; }
+.price > div { display: flex; justify-content: space-between; margin: 4px 0; }
+.price hr { border: none; border-top:1px solid #eee; margin: 8px 0; }
+.price .total { font-weight: 600; }
+.hint { font-size: 12px; color:#666; }
+.viewport { position: relative; background: #fff; border: 1px solid #eee; border-radius: 12px; overflow: hidden; }
+.dnd { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; }
+.dnd li { padding: 8px; border:1px dashed #cfcfcf; border-radius: 8px; background:#fcfcfc; cursor: grab; }
+.dnd li:active { cursor: grabbing; }
+.tag { display:inline-block; padding: 2px 6px; background:#efefef; border-radius: 999px; font-size: 12px; margin-right: 8px; }
+
+/* ---------- Accordion ---------- */
+.acc {
+  border: 1px solid #ececec;
+  border-radius: 12px;
+  background: #fff;
+  margin: 10px 0;
+  overflow: hidden;
+}
+.acc-header {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1fr auto 20px;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  background: #fafafa;
+  border: 0;
+  cursor: pointer;
+  text-align: left;
+}
+.acc-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #222;
+}
+.acc-summary {
+  font-size: 13px;
+  color: #667085;
+}
+.acc-chevron {
+  width: 16px; height: 16px;
+  display: inline-block;
+  border-right: 2px solid #98a2b3;
+  border-bottom: 2px solid #98a2b3;
+  transform: rotate(45deg);
+  transition: transform .18s ease;
+  justify-self: end;
+}
+.acc.open .acc-chevron { transform: rotate(-135deg); }
+.acc-body {
+  padding: 12px 14px 14px;
+  display: none;
+}
+.acc.open .acc-body { display: block; }
+
+/* ---------- Swatch tweaks ---------- */
+/* Swatch — single source of truth */
+.swatch-grid{
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr)); /* можеш змінити на auto-fit,minmax(94px,1fr) для адаптивності */
+  gap:10px;
+}
+.swatch{
+  display:flex; flex-direction:column; align-items:center; gap:6px;
+  border-radius:12px; border:1px solid #e7e7e7; padding:10px; background:#fff; cursor:pointer;
+  outline:none; /* скидаємо нативний, нижче даємо красивий */
+}
+.swatch:hover{ border-color:#d7d7d7; }
+.swatch.selected{ outline:2px solid #6aa0ff; outline-offset:2px; border-color:#6aa0ff; }
+.swatch:focus-visible{ box-shadow:0 0 0 2px #dbeafe; } /* при навігації з клавіатури */
+.swatch .chip{
+  width:48px; height:36px; border-radius:6px;
+  background-size:cover; background-position:center;
+  box-shadow:inset 0 0 0 1px rgba(0,0,0,.06);
+}
+.swatch .cap{ font-size:13px; color:#2b2b2b; font-weight:500; }
+
+/* ---------- Segmented (Matte/Gloss) ---------- */
+.segmented {
+  display: inline-flex;
+  background: #f5f6f7;
+  border: 1px solid #e7e7e7;
+  border-radius: 999px;
+  padding: 4px;
+  gap: 4px;
+}
+.segmented label {
+  position: relative;
+  border-radius: 999px;
+  padding: 6px 12px;
+  cursor: pointer;
+  font-size: 13px;
+  color: #475467;
+  user-select: none;
+}
+.segmented label input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+.segmented label.on {
+  background: #e7f0ff;
+  color: #1d4ed8;
+  box-shadow: inset 0 0 0 1px #cfe0ff;
+}
+
+/* ---------- Toggle switches ---------- */
+.toggle-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: #2b2b2b;
+  cursor: pointer;
+  user-select: none;
+}
+.toggle-switch input {
+  appearance: none;
+  width: 44px;
+  height: 24px;
+  border-radius: 999px;
+  background: #e5e7eb;
+  position: relative;
+  outline: none;
+  transition: background .18s ease;
+}
+.toggle-switch input::after {
+  content: "";
+  position: absolute;
+  top: 3px; left: 3px;
+  width: 18px; height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0,0,0,.12);
+  transition: transform .18s ease;
+}
+.toggle-switch input:checked { background: #22c55e; }
+.toggle-switch input:checked::after { transform: translateX(20px); }
+.ts-slider { display:none; } /* тільки для семантики в розмітці */
+.ts-label { font-weight: 500; }
+
+/* ---------- Minor typography polish ---------- */
+.panel h1 { font-size: 22px; }
+.row label { font-size: 14px; }
+.hint { font-size: 12px; color: #667085; }
+/* Прибрати нативну обводку кнопки й намалювати свою тільки для keyboard-focus */
+.acc-header {
+  outline: none;                 /* ховає стандартну */
+  -webkit-tap-highlight-color: transparent;
+}
+.acc-header:focus { outline: none; }
+.acc-header::-moz-focus-inner { border: 0; } /* Firefox */
+
+.acc:focus-within .acc-header {
+  /* своя, акуратна обводка всередині, НЕ обрізається внизу */
+  box-shadow: inset 0 0 0 2px #dbeafe;
+  /* якщо не хочеш взагалі жодної – просто видали цей block-shadow */
+}
+
+/* ---------- HUD (Heads-Up Display) ---------- */
+.hud {
+  position: absolute;
+  z-index: 5;
+  min-width: 220px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(255,255,255,.9);
+  box-shadow: 0 4px 18px rgba(0,0,0,.12);
+  font-size: 12px;
+  color: #222;
+  backdrop-filter: blur(4px);
+}
+.hud.tl { top: 10px; left: 10px; }
+.hud.tr { top: 10px; right: 10px; }
+.hud.bl { bottom: 10px; left: 10px; }
+.hud.br { bottom: 10px; right: 10px; }
+
+.hud-row { display:flex; justify-content:space-between; gap:10px; margin:3px 0; }
+.hud hr { border:0; border-top:1px solid #eee; margin:6px 0; }
