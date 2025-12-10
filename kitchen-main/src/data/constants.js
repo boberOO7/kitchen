@@ -1,3 +1,13 @@
+export const MODEL_BY_FACADE = {
+  graphite: "/assets/kitchen/kitchen-8.glb",
+  wood:     "/assets/kitchen/kitchen-4.glb",
+  white:    "/assets/kitchen/kitchen-7.glb",
+};
+
+// (не обов'язково) прелоадимо всі варіанти
+import { useGLTF } from "@react-three/drei";
+Object.values(MODEL_BY_FACADE).forEach((url) => useGLTF.preload(url));
+
 export const CARCASS_OPTIONS = [
   { id: "carc_white",   label: "White",        value: "#e9ecef" },
   { id: "carc_light",   label: "Light grey",   value: "#dcdfe3" },

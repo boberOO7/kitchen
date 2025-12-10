@@ -11,11 +11,13 @@ import AccordionSection from "./components/UI/AccordionSection";
 import MetricsHUD from "./components/dev/MetricsHUD";
 import ExposeThree from "./components/dev/ExposeThree";
 import DesignerKitchen from "./components/DesignerKitchen";
+import { MODEL_BY_FACADE } from "./data/constants";
 
 /* ---------- матеріальні пресети (підстав свої шляхи) ---------- */
 const FACADE_SETS = [
-  { id:"wood_gloss",  label:"Wood texture · gloss",  value:{ base:"/assets/textures/wood_d.jpg",  rough:"/assets/textures/wood_rough.jpg",  normal:"/assets/textures/wood_normal.jpg",  ao:"/assets/textures/wood_ao.jpg" } },
-  { id:"wood_grey",    label:"Wood texture · grey",  value:{ base:"/assets/textures/wood_r1.jpg", rough:"/tex/shared/rough.jpg", normal:"/tex/shared/normal.jpg" } },
+  { id:"wood",  label:"Wood texture · gloss",  value:{ base:"/assets/textures/wood_d.jpg",  rough:"/assets/textures/wood_rough.jpg",  normal:"/assets/textures/wood_normal.jpg",  ao:"/assets/textures/wood_ao.jpg" } },
+  { id:"graphite",    label:"Wood texture · grey",  value:{ base:"/assets/textures/wood_r1.jpg", rough:"/tex/shared/rough.jpg", normal:"/tex/shared/normal.jpg" } },
+  { id:"white", label:"Plain white · matte",   value:{ base:"/assets/textures/white_d.jpg", rough:"/assets/textures/white_rough.jpg" } },
 ];
 
 const TOP_SETS = [
@@ -37,16 +39,16 @@ const GLB_TARGET_MATS = {
   carcass: ["Carcass", "Box", "Side", "Shelf", "Bottom", "Back"],
 };
 
-const DESIGNER_URL = "/assets/kitchen/kitchen-3.glb";
 const MODEL_SCALE  = [1,1,1];
-const MODEL_POS    = [0,0,0];
+const MODEL_POS    = [1.25,0,0];
 
 export default function KitchenConfigurator() {
   const [three, setThree] = useState(null);
   const [openId, setOpenId] = useState("facade");
 
   // вибір з акордеону
-  const [facadeId, setFacadeId]   = useState(FACADE_SETS[0].id);
+  const [facadeId, setFacadeId]   = useState(FACADE_SETS[1].id); //graphite
+  const modelUrl = MODEL_BY_FACADE[facadeId]; 
   const [topId, setTopId]         = useState(TOP_SETS[0].id);
   const [carcassId, setCarcassId] = useState(CARCASS_SETS[0].id);
 
@@ -99,14 +101,15 @@ export default function KitchenConfigurator() {
           <SwatchPicker options={CARCASS_SETS} value={carcassId} onChange={setCarcassId} />
         </AccordionSection>
       </div>
-
+      {/* dpr={[1, 3]} */}
       <div className="viewport">
         <Canvas
+          dpr={[1, 2]} 
+          gl={{ antialias: true, powerPreference: "high-performance" }}
           shadows
           camera={{ position: [2.4, 2.0, 3.4], fov: 35 }}
           onCreated={({ gl }) => {
-            if ('outputColorSpace' in gl) gl.outputColorSpace = THREE.SRGBColorSpace;
-            else gl.outputEncoding = THREE.sRGBEncoding;
+            gl.outputColorSpace = THREE.SRGBColorSpace;
             gl.toneMapping = THREE.ACESFilmicToneMapping;
             gl.toneMappingExposure = 1.0;
           }}
@@ -125,9 +128,11 @@ export default function KitchenConfigurator() {
           </group>
 
           <DesignerKitchen
-            url={DESIGNER_URL}
+            url={modelUrl}
             overrides={overrides}
             doors={doors}
+            debug          // увімкне вивід у консоль
+            // debugDownload  // додатково збереже glb-inspect.json
             position={MODEL_POS}
             scale={MODEL_SCALE}
           />
