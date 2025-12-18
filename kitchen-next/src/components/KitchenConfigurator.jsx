@@ -2,11 +2,66 @@
 
 import React, { useMemo, useState } from "react";
 import { Canvas } from "@react-three/fiber";
-import { Bounds, ContactShadows, Environment, OrbitControls } from "@react-three/drei";
+import { Bounds, ContactShadows, Environment, OrbitControls, useProgress } from "@react-three/drei";
 import * as THREE from "three";
 
 import DesignerKitchen from "@/components/DesignerKitchen";
 import { MODEL_BY_FACADE } from "@/data/constants";
+
+// 3D Model Loading overlay
+function ModelLoader() {
+  const { active, progress, loaded, total } = useProgress();
+  
+  if (!active) return null;
+  
+  return (
+    <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-[var(--sky-bg-alt)]/95 backdrop-blur-sm">
+      {/* Spinner */}
+      <div className="relative h-16 w-16">
+        <svg
+          className="animate-spin"
+          viewBox="0 0 50 50"
+          style={{ animation: "spin 1.2s linear infinite" }}
+        >
+          <circle
+            cx="25"
+            cy="25"
+            r="20"
+            fill="none"
+            stroke="var(--sky-border)"
+            strokeWidth="3"
+          />
+          <circle
+            cx="25"
+            cy="25"
+            r="20"
+            fill="none"
+            stroke="var(--sky-accent)"
+            strokeWidth="3"
+            strokeLinecap="round"
+            strokeDasharray={`${progress * 1.26}, 126`}
+            style={{ transition: "stroke-dasharray 0.3s ease" }}
+          />
+        </svg>
+      </div>
+      
+      {/* Progress text */}
+      <div className="mt-4 text-center">
+        <div className="text-sm font-medium text-[var(--sky-fg)]">
+          Завантаження моделі
+        </div>
+        <div className="mt-1 text-2xl font-light tracking-tight text-[var(--sky-fg)]">
+          {Math.round(progress)}%
+        </div>
+        {total > 0 && (
+          <div className="mt-1 text-[10px] text-[var(--sky-muted)]">
+            {loaded} / {total} ресурсів
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 const FACADE_SETS = [
   { id: "wood", label: "Дуб · глянець", value: { base: "/assets/textures/wood_d.jpg" } },
@@ -182,6 +237,9 @@ export default function KitchenConfigurator({ mode = "embedded" }) {
         className={`relative flex-1 overflow-hidden bg-[var(--sky-bg-alt)] ${isFullscreen ? "" : "min-h-[400px] border border-[var(--sky-border)] lg:min-h-0"}`}
         style={{ borderRadius: isFullscreen ? 0 : 3 }}
       >
+        {/* Loading overlay */}
+        <ModelLoader />
+
         <Canvas
           dpr={[1, 2]}
           gl={{ antialias: true, powerPreference: "high-performance" }}

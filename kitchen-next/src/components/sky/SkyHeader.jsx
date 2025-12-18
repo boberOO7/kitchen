@@ -9,7 +9,7 @@ const nav = [
   { href: "/catalog", label: "Каталог" },
   { href: "/configurator", label: "Конфігуратор" },
   { href: "/#materials", label: "Матеріали" },
-  { href: "/#contact", label: "Контакти" },
+  { href: "/contacts", label: "Контакти" },
 ];
 
 export default function SkyHeader() {

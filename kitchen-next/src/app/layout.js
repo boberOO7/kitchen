@@ -1,7 +1,10 @@
+import { Suspense } from "react";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import SkyHeader from "@/components/sky/SkyHeader";
 import SkyFooter from "@/components/sky/SkyFooter";
+import Preloader from "@/components/sky/Preloader";
+import RouteProgress from "@/components/sky/RouteProgress";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -35,6 +38,10 @@ export default function RootLayout({ children }) {
         />
       </head>
       <body className={`${inter.variable} font-sans antialiased`}>
+        <Preloader />
+        <Suspense fallback={null}>
+          <RouteProgress />
+        </Suspense>
         <div className="flex min-h-dvh flex-col bg-[var(--sky-bg)] text-[var(--sky-fg)]">
           <SkyHeader />
           <main className="flex-1">{children}</main>
