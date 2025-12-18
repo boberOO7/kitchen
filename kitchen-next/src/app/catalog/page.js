@@ -46,7 +46,7 @@ export default function CatalogPage() {
               <StaggerItem key={p.slug} variant="fadeUp">
                 <Link
                   href="/configurator"
-                  className="group block overflow-hidden border border-[var(--sky-card-border)] bg-[var(--sky-card-bg)] shadow-[var(--sky-shadow)] transition duration-300 hover:shadow-lg hover:-translate-y-1"
+                  className="group block overflow-hidden border border-[var(--sky-card-border)] bg-[var(--sky-card-bg)] shadow-[var(--sky-shadow)] transition-shadow duration-300 hover:shadow-lg"
                   style={{ borderRadius: 3 }}
                 >
                   {/* Image */}
@@ -55,7 +55,7 @@ export default function CatalogPage() {
                       src={p.image}
                       alt={p.name}
                       fill
-                      className="object-cover transition duration-500 group-hover:scale-[1.03]"
+                      className="object-cover transition-transform duration-500 will-change-transform group-hover:scale-[1.03]"
                       sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
                     />
                     <div
