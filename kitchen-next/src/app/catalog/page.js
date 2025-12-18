@@ -5,6 +5,11 @@ import Image from "next/image";
 import { SKY_PRODUCTS } from "@/data/products";
 import AnimateOnScroll, { StaggerContainer, StaggerItem } from "@/components/animations/AnimateOnScroll";
 
+// Fixed price formatter to avoid hydration mismatch (server vs client locale)
+function formatPrice(price) {
+  return new Intl.NumberFormat("uk-UA").format(price);
+}
+
 export default function CatalogPage() {
   return (
     <>
@@ -57,7 +62,7 @@ export default function CatalogPage() {
                       className="absolute right-3 top-3 bg-[var(--sky-surface)]/90 px-2.5 py-1 text-xs font-medium tracking-[0.04em] text-[var(--sky-fg)] backdrop-blur-sm"
                       style={{ borderRadius: 2 }}
                     >
-                      від €{p.priceFrom.toLocaleString()}
+                      від €{formatPrice(p.priceFrom)}
                     </div>
                     {/* Hover overlay */}
                     <div className="absolute inset-0 flex items-center justify-center bg-black/0 transition duration-300 group-hover:bg-black/20">
