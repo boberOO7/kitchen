@@ -10,7 +10,6 @@ import AccordionSection from "@/components/UI/AccordionSection";
 import MetricsHUD from "@/components/dev/MetricsHUD";
 import ExposeThree from "@/components/dev/ExposeThree";
 import DesignerKitchen from "@/components/DesignerKitchen";
-import PreloadModels from "@/components/PreloadModels";
 import { MODEL_BY_FACADE } from "@/data/constants";
 
 const FACADE_SETS = [
@@ -64,9 +63,7 @@ export default function KitchenConfigurator() {
   const doors = [];
 
   return (
-    <>
-      <PreloadModels />
-      <div className="wrap">
+    <div className="wrap">
         <div className="panel">
           <h1>Kitchen Configurator</h1>
 
@@ -137,7 +134,6 @@ export default function KitchenConfigurator() {
         <MetricsHUD three={three} position="bottom-right" />
       </div>
     </div>
-    </>
   );
 }
 

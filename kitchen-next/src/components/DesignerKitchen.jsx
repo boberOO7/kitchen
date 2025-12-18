@@ -80,7 +80,7 @@ function splitConnectedComponents(geometry) {
   return out;
 }
 
-function makeDoorFromGeometry(geom, baseMaterial) {
+function makeDoorFromGeometry(geom, baseMaterial, debug = false) {
   geom.computeBoundingBox();
   const bb = geom.boundingBox;
   const hingeX = bb.min.x;
@@ -95,6 +95,25 @@ function makeDoorFromGeometry(geom, baseMaterial) {
   mesh.castShadow = mesh.receiveShadow = true;
 
   pivot.add(mesh);
+  
+  // Дебаг: візуалізація осей обертання
+  if (debug) {
+    // AxesHelper: червоний = X, зелений = Y, синій = Z
+    const axesHelper = new THREE.AxesHelper(0.3);
+    pivot.add(axesHelper);
+    
+    // Додаткова стрілка для поточної осі обертання (Z)
+    const arrowHelper = new THREE.ArrowHelper(
+      new THREE.Vector3(0, 0, 1), // напрямок Z (вперед-назад)
+      new THREE.Vector3(0, 0, 0), // початок
+      0.4, // довжина
+      0xffff00, // жовтий колір для виділення
+      0.1, // довжина голівки
+      0.05 // ширина голівки
+    );
+    pivot.add(arrowHelper);
+  }
+  
   return { pivot, mesh, hingeX };
 }
 
@@ -184,122 +203,99 @@ function downloadJSON(filename, data) {
   URL.revokeObjectURL(a.href);
 }
 
-// Глобальний кеш дверей для кожної моделі (за url)
+// Кеш контейнерів дверей для кожної моделі (повний кеш)
 const DOORS_CACHE = new Map();
 
 // Helper функція для створення дверей для сцени
-function createDoorsForScene(scene, url) {
-  // Перевіряємо кеш
+function createDoorsForScene(scene, url, debug = false) {
+  const glassMesh = scene.getObjectByName("Facade_glass_1");
+  if (!glassMesh || !glassMesh.isMesh) {
+    return { doors: [], container: null, parent: null };
+  }
+  
+  // Ховаємо тільки якщо ще не прихований (оптимізація для кешованих сцен)
+  if (glassMesh.visible) {
+    glassMesh.visible = false;
+  }
+  
+  const parent = glassMesh.parent || scene;
+
+  // Перевіряємо кеш - повертаємо існуючий контейнер
   if (DOORS_CACHE.has(url)) {
     const cached = DOORS_CACHE.get(url);
-    console.log(`[DOORS CACHE] Використовуємо кешовані двері для ${url}`);
-    // Перевіряємо чи двері ще валідні
-    if (cached.container && cached.parent) {
-      // Ховаємо glassMesh якщо він був показаний
-      if (cached.glassMesh) {
-        cached.glassMesh.visible = false;
-      }
-      return cached;
-    }
-    // Якщо кеш невалідний, видаляємо його
-    console.warn(`[DOORS CACHE] Кеш невалідний для ${url}, видаляємо`);
-    DOORS_CACHE.delete(url);
+    if (debug) console.log(`♻️ Використано кеш для ${url.split('/').pop()}`);
+    return { ...cached, parent };
   }
 
-  console.log(`[DOORS CACHE] Створюємо нові двері для ${url}`);
-  const arr = [];
-  let container = null;
-  let parent = null;
-
-  const glassMesh = scene.getObjectByName("Facade_glass_1");
-  if (!glassMesh || !glassMesh.isMesh) return { doors: arr, container: null, parent: null };
-
+  // Створюємо новий контейнер тільки якщо немає в кеші
+  if (debug) console.log(`🆕 Створюємо нові двері для ${url.split('/').pop()}`);
   const parts = splitConnectedComponents(glassMesh.geometry);
-
-  parent = glassMesh.parent || scene;
-  container = new THREE.Group();
+  const container = new THREE.Group();
   container.name = "GlassDoorsRoot";
   container.position.copy(glassMesh.position);
   container.quaternion.copy(glassMesh.quaternion);
   container.scale.copy(glassMesh.scale);
 
+  const arr = [];
   for (let i = 0; i < parts.length; i++) {
-    const { pivot, mesh } = makeDoorFromGeometry(parts[i], glassMesh.material);
+    const { pivot, mesh } = makeDoorFromGeometry(parts[i], glassMesh.material, debug);
     pivot.name = `GlassDoor_${i + 1}`;
-    pivot.userData = { open: 0, openRad: Math.PI / 2, axis: "y" };
+    pivot.userData = { open: 0, openRad: -Math.PI / 2, axis: "z" };
+    container.add(pivot);
     arr.push(pivot);
   }
 
-  glassMesh.visible = false;
-  arr.forEach((p) => container.add(p));
-
-  const data = { doors: arr, container, parent, glassMesh };
   // Зберігаємо в кеш
-  DOORS_CACHE.set(url, data);
-  console.log(`[DOORS CACHE] Збережено в кеш. Всього в кеші: ${DOORS_CACHE.size}`);
-  return data;
+  const doorsData = { doors: arr, container };
+  DOORS_CACHE.set(url, doorsData);
+
+  return { ...doorsData, parent };
 }
 
-// Helper функція для dispose дверей
-function disposeDoorsData(doorsData) {
-  if (!doorsData) return;
-  const { container, parent, glassMesh } = doorsData;
-  
-  if (container && parent) {
-    container.traverse((o) => {
-      if (o.isMesh) {
-        if (o.geometry) {
-          o.geometry.dispose();
-        }
-        if (o.material) {
-          if (Array.isArray(o.material)) {
-            o.material.forEach((mat) => {
-              if (mat && mat.dispose) mat.dispose();
-            });
-          } else if (o.material.dispose) {
-            o.material.dispose();
-          }
-        }
-      }
-    });
-    
-    if (parent.children.includes(container)) {
-      parent.remove(container);
-    }
-    container.clear();
-  }
-  
-  // Показуємо назад оригінальний glassMesh
-  if (glassMesh) {
-    glassMesh.visible = true;
-  }
-}
-
-// Експортна функція для очистки кешу (може бути корисна для dev tools або при unmount додатку)
+// Експортна функція для очистки кешу дверей
 export function clearDoorsCache(url) {
   if (url) {
-    // Очищаємо конкретний url
-    const data = DOORS_CACHE.get(url);
-    if (data) {
-      disposeDoorsData(data);
+    const cached = DOORS_CACHE.get(url);
+    if (cached) {
+      cached.container?.traverse((obj) => {
+        if (obj.isMesh) {
+          obj.geometry?.dispose();
+          if (Array.isArray(obj.material)) {
+            obj.material.forEach(mat => mat.dispose?.());
+          } else {
+            obj.material?.dispose();
+          }
+        }
+      });
       DOORS_CACHE.delete(url);
-      console.log(`[DOORS CACHE] Видалено з кешу: ${url}`);
     }
   } else {
-    // Очищаємо весь кеш
-    DOORS_CACHE.forEach((data, url) => {
-      disposeDoorsData(data);
+    DOORS_CACHE.forEach((cached) => {
+      cached.container?.traverse((obj) => {
+        if (obj.isMesh) {
+          obj.geometry?.dispose();
+          if (Array.isArray(obj.material)) {
+            obj.material.forEach(mat => mat.dispose?.());
+          } else {
+            obj.material?.dispose();
+          }
+        }
+      });
     });
     DOORS_CACHE.clear();
-    console.log(`[DOORS CACHE] Кеш повністю очищено`);
   }
 }
 
 // Експортна функція для отримання статистики кешу
-export function getDoorsChacheStats() {
+export function getDoorsCacheStats() {
+  const stats = {};
+  DOORS_CACHE.forEach((cached, url) => {
+    stats[url] = cached.doors.length;
+  });
   return {
     size: DOORS_CACHE.size,
     urls: Array.from(DOORS_CACHE.keys()),
+    doorsPerUrl: stats,
   };
 }
 
@@ -308,15 +304,24 @@ export default function DesignerKitchen({ url, debug = false, debugDownload = fa
 
   useAntiShimmer(scene);
 
-  // Використовуємо кешовані двері або створюємо нові
+  // Використовуємо кешовані двері або створюємо нові (БЕЗ додавання до сцени)
   const doorsData = useMemo(() => {
-    const data = createDoorsForScene(scene, url);
-    // Додаємо контейнер до сцени якщо він ще не доданий
-    if (data.container && data.parent && !data.parent.children.includes(data.container)) {
-      data.parent.add(data.container);
+    return createDoorsForScene(scene, url, debug);
+  }, [scene, url, debug]);
+
+  // Додаємо контейнер до parent (glassMesh.parent)
+  useEffect(() => {
+    const { container, parent } = doorsData;
+    if (!container || !parent) return;
+
+    // Додаємо контейнер тільки якщо його ще немає
+    if (!parent.children.includes(container)) {
+      parent.add(container);
     }
-    return data;
-  }, [scene, url]);
+    
+    // Не видаляємо контейнер в cleanup - він залишається в кешованій сцені
+    // Це нормально, бо при зміні кольору ми переключаємося на іншу сцену
+  }, [doorsData, url]);
 
   const onPointerDown = (e) => {
     let node = e.object;
@@ -329,40 +334,20 @@ export default function DesignerKitchen({ url, debug = false, debugDownload = fa
   useFrame((_, dt) => {
     const doors = doorsData.doors || [];
     doors.forEach((pivot) => {
-      const { open, openRad = Math.PI / 2, axis = "y" } = pivot.userData;
+      const { open, openRad = -Math.PI / 2, axis = "z" } = pivot.userData;
       const target = open ? openRad : 0;
       const cur = pivot.rotation[axis];
       const diff = target - cur;
+      
+      // Оптимізація: пропускаємо якщо вже на місці
+      if (Math.abs(diff) < 0.001) return;
+      
       const step = Math.sign(diff) * Math.min(Math.abs(diff), dt * 5);
       pivot.rotation[axis] = cur + step;
     });
   });
 
-  // Cleanup - просто видаляємо контейнер зі сцени при зміні url
-  // Двері залишаються в кеші і можуть бути перевикористані
-  useEffect(() => {
-    const currentDoorsData = doorsData;
-    return () => {
-      // При зміні url видаляємо контейнер зі старої сцени
-      // але НЕ dispose-имо геометрії - вони залишаються в кеші
-      const { container, parent, glassMesh } = currentDoorsData;
-      if (container && parent && parent.children.includes(container)) {
-        parent.remove(container);
-      }
-      // Показуємо назад оригінальний glassMesh
-      if (glassMesh) {
-        glassMesh.visible = true;
-      }
-    };
-  }, [url, doorsData]);
 
-  // Дебаг інформація про кеш дверей
-  useEffect(() => {
-    if (debug) {
-      const stats = getDoorsChacheStats();
-      console.log(`%c[DOORS CACHE] Stats`, "color:#10b981;font-weight:600", stats);
-    }
-  }, [url, debug]);
 
   useEffect(() => {
     if (!debug && !debugDownload) return;
@@ -382,25 +367,11 @@ export default function DesignerKitchen({ url, debug = false, debugDownload = fa
     if (debugDownload) downloadJSON("glb-inspect.json", { tree, meshes, materials: mats });
   }, [debug, debugDownload, scene, materials]);
 
-  useEffect(() => {
-    console.groupCollapsed("[GLB] lights & emissive check");
-    scene.traverse((o) => {
-      if (o.isLight) {
-        console.log("LIGHT:", o.type, o.name, {
-          color: `#${o.color?.getHexString?.()}`,
-          intensity: o.intensity, distance: o.distance, angle: o.angle,
-        });
-      } else if (o.isMesh && o.material?.emissive && o.material.emissiveIntensity > 0) {
-        console.log("EMISSIVE MESH:", o.name, o.material.name, {
-          emissive: `#${o.material.emissive.getHexString?.()}`,
-          intensity: o.material.emissiveIntensity,
-        });
-      }
-    });
-    console.groupEnd();
-  }, [scene]);
 
   useEffect(() => {
+    // Перевіряємо чи сцена вже була оброблена
+    if (scene.userData.materialsProcessed) return;
+    
     const isGlassMatName = (name = "") =>
       /glass/i.test(name) || name === "Material__92118" || name === "Material__92119";
 
@@ -456,11 +427,30 @@ export default function DesignerKitchen({ url, debug = false, debugDownload = fa
         mat.roughness = 0.8;
       }
     });
+    
+    // Позначаємо що сцена вже оброблена
+    scene.userData.materialsProcessed = true;
   }, [scene, materials]);
 
   useEffect(() => {
+    if (scene.userData.shadowsProcessed) return;
     scene.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+    scene.userData.shadowsProcessed = true;
   }, [scene]);
+
+  // Дебаг: додаємо глобальний AxesHelper до сцени
+  useEffect(() => {
+    if (!debug) return;
+    
+    const globalAxesHelper = new THREE.AxesHelper(2);
+    globalAxesHelper.name = "GlobalAxesHelper";
+    scene.add(globalAxesHelper);
+    
+    return () => {
+      const helper = scene.getObjectByName("GlobalAxesHelper");
+      if (helper) scene.remove(helper);
+    };
+  }, [scene, debug]);
 
   return <primitive object={scene} {...props} onPointerDown={onPointerDown} />;
 }
