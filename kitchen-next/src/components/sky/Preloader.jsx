@@ -72,28 +72,10 @@ export default function Preloader() {
         {/* Animated line */}
         <div className="relative h-[2px] w-32 overflow-hidden bg-[var(--sky-hero-fg)]/10">
           <div
-            className="absolute inset-y-0 left-0 w-1/2 bg-[var(--sky-hero-fg)]/60"
-            style={{
-              animation: "preloader-slide 1.2s ease-in-out infinite",
-            }}
+            className="sky-preloader-sweep absolute inset-y-0 left-0 w-1/2 bg-[var(--sky-hero-fg)]/60"
           />
         </div>
       </div>
-
-      {/* CSS Keyframes */}
-      <style jsx>{`
-        @keyframes preloader-slide {
-          0% {
-            transform: translateX(-100%);
-          }
-          50% {
-            transform: translateX(200%);
-          }
-          100% {
-            transform: translateX(-100%);
-          }
-        }
-      `}</style>
     </div>
   );
 }

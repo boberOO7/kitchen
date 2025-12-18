@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import ThemeToggle from "@/components/sky/ThemeToggle";
+import ScrollProgress from "@/components/sky/ScrollProgress";
 
 const nav = [
   { href: "/catalog", label: "Каталог" },
@@ -16,7 +17,7 @@ export default function SkyHeader() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   return (
-    <header className="sticky top-0 z-50 border-b border-[var(--sky-header-border)] bg-[var(--sky-header-bg)] backdrop-blur-md">
+    <header className="sticky top-0 z-50 relative border-b border-[var(--sky-header-border)] bg-[var(--sky-header-bg)] backdrop-blur-md">
       <div className="mx-auto flex w-full max-w-[1200px] items-center justify-between px-4 py-3 sm:px-6">
         {/* Logo */}
         <Link href="/" className="group inline-flex items-center gap-2.5">
@@ -123,6 +124,9 @@ export default function SkyHeader() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Delicate scroll progress (home page only) */}
+      <ScrollProgress />
     </header>
   );
 }

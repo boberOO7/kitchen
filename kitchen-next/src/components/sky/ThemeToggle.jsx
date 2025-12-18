@@ -19,12 +19,14 @@ function getInitial(key, fallback) {
 }
 
 export default function ThemeToggle() {
+  const [mounted, setMounted] = useState(false);
   const [theme, setTheme] = useState(() => getInitial(THEME_KEY, "dark"));
   const [palette, setPalette] = useState(() => getInitial(PALETTE_KEY, "mono"));
   const [videoEnabled, setVideoEnabled] = useState(true);
   const [showPalettes, setShowPalettes] = useState(false);
 
   useEffect(() => {
+    setMounted(true);
     try {
       const storedTheme = localStorage.getItem(THEME_KEY);
       const storedPalette = localStorage.getItem(PALETTE_KEY);
@@ -56,6 +58,19 @@ export default function ThemeToggle() {
   }, [videoEnabled]);
 
   const currentPalette = PALETTES.find(p => p.id === palette) || PALETTES[0];
+
+  // Avoid hydration mismatch: server can't know localStorage-based palette/theme.
+  // Render a fixed-size placeholder until mounted so SSR and first client render match.
+  if (!mounted) {
+    return (
+      <div className="relative flex items-center gap-2" aria-hidden="true">
+        <div
+          className="h-8 w-[140px] border border-[var(--sky-header-border)] bg-[var(--sky-header-surface)]"
+          style={{ borderRadius: 2 }}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="relative flex items-center gap-2">

@@ -1,5 +1,23 @@
 @import "tailwindcss";
 
+/* SKY preloaders */
+@keyframes sky-preloader-sweep {
+  0% {
+    transform: translateX(-120%);
+  }
+  50% {
+    transform: translateX(220%);
+  }
+  100% {
+    transform: translateX(-120%);
+  }
+}
+
+.sky-preloader-sweep {
+  animation: sky-preloader-sweep 1.2s ease-in-out infinite;
+  will-change: transform;
+}
+
 /* ═══════════════════════════════════════════════════════════════════════════
    SKY KITCHENS — Luxury Minimal Design System
    4 Palettes × 2 Modes (Light/Dark) = 8 themes
