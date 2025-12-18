@@ -6,6 +6,41 @@ import { useFrame } from "@react-three/fiber";
 import { useGLTF } from "@react-three/drei";
 import { useAntiShimmer } from "./useAntiShimer";
 
+// -------- texture cache (avoid reloading same URLs across changes)
+const TEX_CACHE = new Map(); // url -> Promise<THREE.Texture> | THREE.Texture
+
+async function loadTexture(url, { colorSpace } = {}) {
+  if (!url || typeof url !== "string") return null;
+  const key = url;
+  const cached = TEX_CACHE.get(key);
+  if (cached) return await cached;
+
+  const loader = new THREE.TextureLoader();
+  const p = loader.loadAsync(url).then((tex) => {
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    if (colorSpace) tex.colorSpace = colorSpace;
+    tex.anisotropy = 8;
+    tex.needsUpdate = true;
+    TEX_CACHE.set(key, tex);
+    return tex;
+  });
+  TEX_CACHE.set(key, p);
+  return await p;
+}
+
+function normalizeNeedles(arr) {
+  return (arr || []).filter(Boolean).map((s) => String(s).toLowerCase());
+}
+
+function matchCategoryForMaterial(matName, targets) {
+  const n = (matName || "").toLowerCase();
+  for (const [cat, needles] of Object.entries(targets || {})) {
+    const ns = normalizeNeedles(needles);
+    if (ns.some((x) => n.includes(x))) return cat;
+  }
+  return null;
+}
+
 // --- utils: розбити BufferGeometry на connected components
 function splitConnectedComponents(geometry) {
   const index = geometry.index;
@@ -299,7 +334,7 @@ export function getDoorsCacheStats() {
   };
 }
 
-export default function DesignerKitchen({ url, debug = false, debugDownload = false, ...props }) {
+export default function DesignerKitchen({ url, overrides, debug = false, debugDownload = false, ...props }) {
   const { scene, materials } = useGLTF(url);
 
   useAntiShimmer(scene);
@@ -369,8 +404,8 @@ export default function DesignerKitchen({ url, debug = false, debugDownload = fa
 
 
   useEffect(() => {
-    // Перевіряємо чи сцена вже була оброблена
-    if (scene.userData.materialsProcessed) return;
+    // Базова обробка матеріалів (скло/фолбек) — робимо один раз на scene
+    if (scene.userData.skyBaseMaterialsProcessed) return;
     
     const isGlassMatName = (name = "") =>
       /glass/i.test(name) || name === "Material__92118" || name === "Material__92119";
@@ -428,9 +463,94 @@ export default function DesignerKitchen({ url, debug = false, debugDownload = fa
       }
     });
     
-    // Позначаємо що сцена вже оброблена
-    scene.userData.materialsProcessed = true;
+    scene.userData.skyBaseMaterialsProcessed = true;
   }, [scene, materials]);
+
+  useEffect(() => {
+    // Накладання кастомних текстур/кольорів (може змінюватися при UI виборі)
+    const sets = overrides?.sets;
+    const targets = overrides?.targetMats;
+    if (!sets || !targets) return;
+
+    let cancelled = false;
+
+    const run = async () => {
+      // preload textures for all categories
+      const cfg = {
+        facade: {
+          base: sets.facade?.base,
+          rough: sets.facade?.rough,
+          normal: sets.facade?.normal,
+          ao: sets.facade?.ao,
+        },
+        top: {
+          base: sets.top?.base,
+          rough: sets.top?.rough,
+          normal: sets.top?.normal,
+          ao: sets.top?.ao,
+        },
+        carcass: {
+          base: sets.carcass?.base,
+          rough: sets.carcass?.rough,
+          normal: sets.carcass?.normal,
+          ao: sets.carcass?.ao,
+        },
+      };
+
+      const loaded = {};
+      for (const [cat, v] of Object.entries(cfg)) {
+        loaded[cat] = {
+          base:
+            typeof v.base === "string" && v.base.trim().startsWith("#")
+              ? v.base.trim()
+              : await loadTexture(v.base, { colorSpace: THREE.SRGBColorSpace }),
+          rough: await loadTexture(v.rough, { colorSpace: THREE.NoColorSpace }),
+          normal: await loadTexture(v.normal, { colorSpace: THREE.NoColorSpace }),
+          ao: await loadTexture(v.ao, { colorSpace: THREE.NoColorSpace }),
+        };
+      }
+
+      if (cancelled) return;
+
+      scene.traverse((o) => {
+        if (!o.isMesh) return;
+        const applyToMat = (mat) => {
+          if (!mat) return;
+          const cat = matchCategoryForMaterial(`${o.name || ""} ${mat.name || ""}`, targets);
+          if (!cat) return;
+          const t = loaded[cat];
+
+          if (typeof t.base === "string") {
+            // hex color
+            mat.map = null;
+            if (mat.color) mat.color.set(t.base);
+          } else if (t.base) {
+            mat.map = t.base;
+            if (mat.color) mat.color.set(0xffffff);
+          }
+
+          if ("roughnessMap" in mat) mat.roughnessMap = t.rough || null;
+          if ("normalMap" in mat) mat.normalMap = t.normal || null;
+          if ("aoMap" in mat) mat.aoMap = t.ao || null;
+
+          // give a subtle premium finish baseline
+          if ("metalness" in mat) mat.metalness = Math.min(0.12, mat.metalness ?? 0.0);
+          if ("roughness" in mat) mat.roughness = Math.max(0.25, Math.min(0.85, mat.roughness ?? 0.55));
+
+          mat.needsUpdate = true;
+        };
+
+        const m = o.material;
+        if (Array.isArray(m)) m.forEach(applyToMat);
+        else applyToMat(m);
+      });
+    };
+
+    run();
+    return () => {
+      cancelled = true;
+    };
+  }, [scene, overrides]);
 
   useEffect(() => {
     if (scene.userData.shadowsProcessed) return;
