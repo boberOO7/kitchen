@@ -5,6 +5,13 @@ import { useEffect, useState } from "react";
 const THEME_KEY = "sky-theme";
 const PALETTE_KEY = "sky-palette";
 const VIDEO_KEY = "sky-video";
+const MAGNET_KEY = "sky-magnet";
+
+const MAGNET_MODES = [
+  { id: "free", label: "Free" },
+  { id: "field", label: "Field" },
+  { id: "off", label: "Off" },
+];
 
 const PALETTES = [
   { id: "mono", label: "Mono", color: "#0a0a0a" },
@@ -23,6 +30,7 @@ export default function ThemeToggle() {
   const [theme, setTheme] = useState(() => getInitial(THEME_KEY, "dark"));
   const [palette, setPalette] = useState(() => getInitial(PALETTE_KEY, "mono"));
   const [videoEnabled, setVideoEnabled] = useState(true);
+  const [magnetMode, setMagnetMode] = useState("free");
   const [showPalettes, setShowPalettes] = useState(false);
 
   useEffect(() => {
@@ -31,9 +39,11 @@ export default function ThemeToggle() {
       const storedTheme = localStorage.getItem(THEME_KEY);
       const storedPalette = localStorage.getItem(PALETTE_KEY);
       const storedVideo = localStorage.getItem(VIDEO_KEY);
+      const storedMagnet = localStorage.getItem(MAGNET_KEY);
       if (storedTheme) setTheme(storedTheme);
       if (storedPalette) setPalette(storedPalette);
       if (storedVideo !== null) setVideoEnabled(storedVideo === "true");
+      if (storedMagnet) setMagnetMode(storedMagnet);
     } catch {}
   }, []);
 
@@ -57,7 +67,14 @@ export default function ThemeToggle() {
     window.dispatchEvent(new CustomEvent("sky-video-change", { detail: videoEnabled }));
   }, [videoEnabled]);
 
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    try { localStorage.setItem(MAGNET_KEY, magnetMode); } catch {}
+    window.dispatchEvent(new CustomEvent("sky-magnet-change", { detail: magnetMode }));
+  }, [magnetMode]);
+
   const currentPalette = PALETTES.find(p => p.id === palette) || PALETTES[0];
+  const currentMagnet = MAGNET_MODES.find((m) => m.id === magnetMode) || MAGNET_MODES[0];
 
   // Avoid hydration mismatch: server can't know localStorage-based palette/theme.
   // Render a fixed-size placeholder until mounted so SSR and first client render match.
@@ -74,6 +91,23 @@ export default function ThemeToggle() {
 
   return (
     <div className="relative flex items-center gap-2">
+      {/* Magnetism mode toggle */}
+      <button
+        type="button"
+        onClick={() => {
+          const idx = MAGNET_MODES.findIndex((m) => m.id === magnetMode);
+          const next = MAGNET_MODES[(idx + 1) % MAGNET_MODES.length]?.id || "free";
+          setMagnetMode(next);
+        }}
+        className="flex h-8 items-center gap-2 border border-[var(--sky-header-border)] bg-[var(--sky-header-surface)] px-2.5 text-[var(--sky-header-fg)] transition hover:bg-[var(--sky-header-surface-hover)]"
+        style={{ borderRadius: 2 }}
+        aria-label="Magnetism mode"
+        title={`Magnet: ${currentMagnet.label}`}
+      >
+        <span className="text-[11px] tracking-[0.08em] opacity-80">MAG</span>
+        <span className="hidden text-xs sm:inline">{currentMagnet.label}</span>
+      </button>
+
       {/* Video toggle */}
       <button
         type="button"

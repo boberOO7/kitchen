@@ -20,7 +20,7 @@ export default function SkyHeader() {
     <header className="sticky top-0 z-50 relative border-b border-[var(--sky-header-border)] bg-[var(--sky-header-bg)] backdrop-blur-md">
       <div className="mx-auto flex w-full max-w-[1200px] items-center justify-between px-4 py-3 sm:px-6">
         {/* Logo */}
-        <Link href="/" className="group inline-flex items-center gap-2.5">
+        <Link href="/" className="group inline-flex items-center gap-2.5" data-cursor-magnetic>
           <span className="text-sm font-semibold tracking-[0.2em] text-[var(--sky-header-fg)]">
             SKY
           </span>
@@ -40,6 +40,7 @@ export default function SkyHeader() {
               key={item.href}
               href={item.href}
               className="text-sm text-[var(--sky-header-muted)] transition hover:text-[var(--sky-header-fg)]"
+              data-cursor-magnetic
             >
               {item.label}
             </Link>
@@ -55,6 +56,7 @@ export default function SkyHeader() {
             href="/configurator"
             className="hidden items-center justify-center bg-[var(--sky-accent)] px-4 py-2 text-xs font-medium tracking-[0.04em] text-[var(--sky-accent-fg)] transition hover:opacity-90 sm:inline-flex"
             style={{ borderRadius: 2 }}
+            data-cursor-magnetic
           >
             Зібрати кухню
           </Link>

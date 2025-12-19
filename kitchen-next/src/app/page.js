@@ -119,6 +119,7 @@ export default function Home() {
                   href="/configurator"
                   className="inline-flex items-center justify-center bg-white px-6 py-3 text-sm font-medium tracking-[0.02em] text-black transition hover:bg-white/90"
                   style={{ borderRadius: 2 }}
+                  data-cursor-magnetic
                 >
                   Запустити конфігуратор
                 </Link>
@@ -126,6 +127,7 @@ export default function Home() {
                   href="/catalog"
                   className="inline-flex items-center justify-center border border-white/30 px-6 py-3 text-sm font-medium tracking-[0.02em] text-white transition hover:border-white/50 hover:bg-white/10"
                   style={{ borderRadius: 2 }}
+                  data-cursor-magnetic
                 >
                   Переглянути колекції
                 </Link>
@@ -180,6 +182,7 @@ export default function Home() {
               <Link
                 className="text-sm text-[var(--sky-muted)] transition hover:text-[var(--sky-fg)]"
                 href="/catalog"
+                data-cursor-magnetic
               >
                 Увесь каталог →
               </Link>
@@ -194,6 +197,7 @@ export default function Home() {
                   href="/configurator"
                   className="group relative block overflow-hidden border border-[var(--sky-card-border)] bg-[var(--sky-card-bg)] shadow-[var(--sky-shadow)] transition-shadow duration-300 hover:shadow-lg"
                   style={{ borderRadius: 3 }}
+                  data-cursor-magnetic
                 >
                   {/* Image */}
                   <div className="relative aspect-[4/3] overflow-hidden bg-[var(--sky-bg-alt)]">
@@ -272,6 +276,7 @@ export default function Home() {
                   href="/configurator"
                   className="mt-8 inline-flex items-center gap-2 bg-[var(--sky-accent)] px-5 py-2.5 text-sm font-medium text-[var(--sky-accent-fg)] transition hover:opacity-90"
                   style={{ borderRadius: 2 }}
+                  data-cursor-magnetic
                 >
                   Спробувати в конфігураторі
                   <svg className="h-4 w-4 opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -522,7 +527,7 @@ export default function Home() {
                 FAQ
               </div>
               <h2 className="mt-2 text-2xl font-light tracking-[-0.01em] text-[var(--sky-fg)] sm:text-3xl">
-                Часті <span className="font-normal">питання</span>
+                <span className="font-normal">Часті питання</span>
               </h2>
             </div>
           </AnimateOnScroll>
@@ -570,6 +575,7 @@ export default function Home() {
                     type="button"
                     onClick={() => setOpenFaq(openFaq === item.id ? null : item.id)}
                     className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left"
+                    data-cursor-magnetic
                   >
                     <span className="text-sm font-medium text-[var(--sky-fg)] sm:text-base">
                       {item.question}
@@ -609,11 +615,11 @@ export default function Home() {
           <AnimateOnScroll variant="fadeUp" delay={0.3}>
             <p className="mt-10 text-center text-sm text-[var(--sky-muted)]">
               Не знайшли відповідь?{" "}
-              <a href="tel:+380XXXXXXXXX" className="font-medium text-[var(--sky-accent)] hover:underline">
+              <a href="tel:+380XXXXXXXXX" className="font-medium text-[var(--sky-accent)] hover:underline" data-cursor-magnetic>
                 Зателефонуйте нам
               </a>{" "}
               або{" "}
-              <Link href="/configurator" className="font-medium text-[var(--sky-accent)] hover:underline">
+              <Link href="/configurator" className="font-medium text-[var(--sky-accent)] hover:underline" data-cursor-magnetic>
                 залиште заявку
               </Link>
             </p>
@@ -643,6 +649,7 @@ export default function Home() {
               href="/configurator"
               className="mt-8 inline-flex items-center justify-center bg-[var(--sky-hero-fg)] px-8 py-3.5 text-sm font-medium tracking-[0.02em] text-[var(--sky-hero-bg)] transition hover:opacity-90"
               style={{ borderRadius: 2 }}
+              data-cursor-magnetic
             >
               Відкрити конфігуратор
             </Link>

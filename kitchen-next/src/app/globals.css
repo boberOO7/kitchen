@@ -1,5 +1,23 @@
 @import "tailwindcss";
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   CUSTOM CURSOR - Hide system cursor
+   ═══════════════════════════════════════════════════════════════════════════ */
+/* Force-hide system cursor everywhere (Chrome/Edge safe) */
+html,
+body,
+*,
+*::before,
+*::after {
+  cursor: none !important;
+}
+
+/* Optional escape hatch if needed later */
+.allow-system-cursor,
+.allow-system-cursor * {
+  cursor: auto !important;
+}
+
 /* SKY preloaders */
 @keyframes sky-preloader-sweep {
   0% {

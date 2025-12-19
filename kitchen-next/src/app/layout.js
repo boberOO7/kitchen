@@ -5,6 +5,7 @@ import SkyHeader from "@/components/sky/SkyHeader";
 import SkyFooter from "@/components/sky/SkyFooter";
 import Preloader from "@/components/sky/Preloader";
 import RouteProgress from "@/components/sky/RouteProgress";
+import FluidCursor from "@/components/sky/FluidCursor";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -38,6 +39,7 @@ export default function RootLayout({ children }) {
         />
       </head>
       <body className={`${inter.variable} font-sans antialiased`}>
+        <FluidCursor />
         <Preloader />
         <Suspense fallback={null}>
           <RouteProgress />
