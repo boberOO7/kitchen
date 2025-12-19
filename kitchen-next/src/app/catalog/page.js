@@ -4,6 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { SKY_PRODUCTS } from "@/data/products";
 import AnimateOnScroll, { StaggerContainer, StaggerItem } from "@/components/animations/AnimateOnScroll";
+import { track } from "@/lib/analytics";
 
 // Fixed price formatter to avoid hydration mismatch (server vs client locale)
 function formatPrice(price) {
@@ -46,6 +47,7 @@ export default function CatalogPage() {
               <StaggerItem key={p.slug} variant="fadeUp">
                 <Link
                   href="/configurator"
+                  onClick={() => track("cta_configurator_click", { source: "catalog_product_card", product: p.slug })}
                   className="group block overflow-hidden border border-[var(--sky-card-border)] bg-[var(--sky-card-bg)] shadow-[var(--sky-shadow)] transition-shadow duration-300 hover:shadow-lg"
                   style={{ borderRadius: 3 }}
                 >

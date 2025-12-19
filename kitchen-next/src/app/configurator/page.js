@@ -1,10 +1,18 @@
 "use client";
 
+import { useEffect } from "react";
 import KitchenConfigurator from "@/components/KitchenConfigurator";
+import PreloadModels from "@/components/PreloadModels";
+import { track } from "@/lib/analytics";
 
 export default function ConfiguratorPage() {
+  useEffect(() => {
+    track("configurator_open");
+  }, []);
+
   return (
     <>
+      <PreloadModels />
       {/* Full-screen configurator */}
       <section className="flex flex-col" style={{ height: "calc(100dvh - 57px)" }}>
         {/* Compact header */}

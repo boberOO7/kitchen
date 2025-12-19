@@ -291,6 +291,17 @@ body,
     scroll-behavior: smooth;
   }
 
+  /* Accessible focus styles (subtle, theme-aware) */
+  a:focus-visible,
+  button:focus-visible,
+  [role="button"]:focus-visible,
+  input:focus-visible,
+  textarea:focus-visible,
+  select:focus-visible {
+    outline: 2px solid color-mix(in oklab, var(--sky-accent) 80%, transparent);
+    outline-offset: 3px;
+  }
+
   html, body {
     height: 100%;
   }

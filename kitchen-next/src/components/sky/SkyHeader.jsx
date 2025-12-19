@@ -5,6 +5,7 @@ import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import ThemeToggle from "@/components/sky/ThemeToggle";
 import ScrollProgress from "@/components/sky/ScrollProgress";
+import { track } from "@/lib/analytics";
 
 const nav = [
   { href: "/catalog", label: "Каталог" },
@@ -54,6 +55,7 @@ export default function SkyHeader() {
           {/* Desktop CTA */}
           <Link
             href="/configurator"
+            onClick={() => track("cta_configurator_click", { source: "header" })}
             className="hidden items-center justify-center bg-[var(--sky-accent)] px-4 py-2 text-xs font-medium tracking-[0.04em] text-[var(--sky-accent-fg)] transition hover:opacity-90 sm:inline-flex"
             style={{ borderRadius: 2 }}
             data-cursor-magnetic
@@ -115,7 +117,10 @@ export default function SkyHeader() {
               >
                 <Link
                   href="/configurator"
-                  onClick={() => setMobileMenuOpen(false)}
+                  onClick={() => {
+                    track("cta_configurator_click", { source: "mobile_menu" });
+                    setMobileMenuOpen(false);
+                  }}
                   className="inline-flex w-full items-center justify-center bg-[var(--sky-accent)] px-4 py-2.5 text-sm font-medium text-[var(--sky-accent-fg)]"
                   style={{ borderRadius: 2 }}
                 >

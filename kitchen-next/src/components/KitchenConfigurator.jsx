@@ -7,6 +7,8 @@ import * as THREE from "three";
 
 import DesignerKitchen from "@/components/DesignerKitchen";
 import { MODEL_BY_FACADE } from "@/data/constants";
+import { CARCASS_SETS, FACADE_SETS, TOP_SETS } from "@/data/configuratorOptions";
+import { useConfiguratorStore } from "@/stores/useConfiguratorStore";
 
 // 3D Model Loading overlay
 function ModelLoader() {
@@ -63,23 +65,6 @@ function ModelLoader() {
   );
 }
 
-const FACADE_SETS = [
-  { id: "wood", label: "Дуб · глянець", value: { base: "/assets/textures/wood_d.jpg" } },
-  { id: "graphite", label: "Дуб · сірий", value: { base: "/assets/textures/wood_r1.jpg" } },
-  { id: "white", label: "Білий · мат", value: { base: "/assets/textures/white_d.jpg" } },
-];
-
-const TOP_SETS = [
-  { id: "quartz_white", label: "Білий кварц", value: "#efefef" },
-  { id: "dark_slate", label: "Темний сланець", value: "#222629" },
-];
-
-const CARCASS_SETS = [
-  { id: "carc_white", label: "Білий", value: "#e9ecef" },
-  { id: "carc_grey", label: "Світло-сірий", value: "#dcdfe3" },
-  { id: "carc_graph", label: "Графіт", value: "#3c4043" },
-];
-
 const MODEL_SCALE = [1, 1, 1];
 const MODEL_POS = [1.25, 0, 0];
 
@@ -104,10 +89,12 @@ function makeChipStyle(opt) {
 export default function KitchenConfigurator({ mode = "embedded" }) {
   const [openSection, setOpenSection] = useState("facade");
 
-  const [facadeId, setFacadeId] = useState(FACADE_SETS[1].id);
-  const modelUrl = MODEL_BY_FACADE[facadeId];
-  const [topId, setTopId] = useState(TOP_SETS[0].id);
-  const [carcassId, setCarcassId] = useState(CARCASS_SETS[0].id);
+  const facadeId = useConfiguratorStore((s) => s.facadeId);
+  const topId = useConfiguratorStore((s) => s.topId);
+  const carcassId = useConfiguratorStore((s) => s.carcassId);
+  const setFacadeId = useConfiguratorStore((s) => s.setFacade);
+  const setTopId = useConfiguratorStore((s) => s.setTop);
+  const setCarcassId = useConfiguratorStore((s) => s.setCarcass);
 
   const facadeLabel = useMemo(() => FACADE_SETS.find((x) => x.id === facadeId)?.label ?? "", [facadeId]);
   const topLabel = useMemo(() => TOP_SETS.find((x) => x.id === topId)?.label ?? "", [topId]);
@@ -279,10 +266,14 @@ export default function KitchenConfigurator({ mode = "embedded" }) {
             <meshStandardMaterial color="#f0f1f3" roughness={0.92} metalness={0} />
           </mesh>
 
-          {/* Model with auto-fit */}
+          {/* All models preloaded, toggle visibility for instant switching */}
           <Bounds fit clip observe margin={1.15}>
             <group position={MODEL_POS} scale={MODEL_SCALE}>
-              <DesignerKitchen url={modelUrl} debug={false} />
+              {Object.entries(MODEL_BY_FACADE).map(([id, url]) => (
+                <group key={id} visible={id === facadeId}>
+                  <DesignerKitchen url={url} debug={false} />
+                </group>
+              ))}
             </group>
           </Bounds>
 

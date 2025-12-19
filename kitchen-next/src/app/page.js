@@ -6,6 +6,7 @@ import Image from "next/image";
 import { SKY_PRODUCTS } from "@/data/products";
 import AnimateOnScroll, { StaggerContainer, StaggerItem } from "@/components/animations/AnimateOnScroll";
 import PreloadModels from "@/components/PreloadModels";
+import { track } from "@/lib/analytics";
 
 // Pixabay CDN video URL (free, allows hotlinking) - modern architecture interior
 const HERO_VIDEO_URL = "https://cdn.pixabay.com/video/2020/05/25/40130-424930032_large.mp4";
@@ -117,6 +118,7 @@ export default function Home() {
               <div className="mt-10 flex flex-col gap-3 sm:flex-row sm:items-center">
                 <Link
                   href="/configurator"
+                  onClick={() => track("cta_configurator_click", { source: "home_hero_primary" })}
                   className="inline-flex items-center justify-center bg-white px-6 py-3 text-sm font-medium tracking-[0.02em] text-black transition hover:bg-white/90"
                   style={{ borderRadius: 2 }}
                   data-cursor-magnetic
@@ -619,7 +621,12 @@ export default function Home() {
                 Зателефонуйте нам
               </a>{" "}
               або{" "}
-              <Link href="/configurator" className="font-medium text-[var(--sky-accent)] hover:underline" data-cursor-magnetic>
+              <Link
+                href="/configurator"
+                onClick={() => track("cta_configurator_click", { source: "home_faq_prompt" })}
+                className="font-medium text-[var(--sky-accent)] hover:underline"
+                data-cursor-magnetic
+              >
                 залиште заявку
               </Link>
             </p>
@@ -647,6 +654,7 @@ export default function Home() {
           <AnimateOnScroll variant="fadeUp" delay={0.2}>
             <Link
               href="/configurator"
+              onClick={() => track("cta_configurator_click", { source: "home_bottom_cta" })}
               className="mt-8 inline-flex items-center justify-center bg-[var(--sky-hero-fg)] px-8 py-3.5 text-sm font-medium tracking-[0.02em] text-[var(--sky-hero-bg)] transition hover:opacity-90"
               style={{ borderRadius: 2 }}
               data-cursor-magnetic

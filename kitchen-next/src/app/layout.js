@@ -6,6 +6,8 @@ import SkyFooter from "@/components/sky/SkyFooter";
 import Preloader from "@/components/sky/Preloader";
 import RouteProgress from "@/components/sky/RouteProgress";
 import FluidCursor from "@/components/sky/FluidCursor";
+import BackToTop from "@/components/sky/BackToTop";
+import { Analytics } from "@vercel/analytics/react";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -40,6 +42,7 @@ export default function RootLayout({ children }) {
       </head>
       <body className={`${inter.variable} font-sans antialiased`}>
         <FluidCursor />
+        <BackToTop />
         <Preloader />
         <Suspense fallback={null}>
           <RouteProgress />
@@ -49,6 +52,7 @@ export default function RootLayout({ children }) {
           <main className="flex-1">{children}</main>
           <SkyFooter />
         </div>
+        <Analytics />
       </body>
     </html>
   );
