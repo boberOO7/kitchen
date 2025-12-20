@@ -20,5 +20,3 @@ export const prisma = globalForPrisma.__prisma ?? makeClient();
 if (process.env.NODE_ENV !== "production") {
   globalForPrisma.__prisma = prisma;
 }
-
-
