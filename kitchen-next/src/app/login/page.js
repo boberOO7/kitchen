@@ -1,14 +1,33 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState(null);
+  const [user, setUser] = useState(null);
+  const [checkingAuth, setCheckingAuth] = useState(true);
 
   const supabase = createClient();
+
+  // Check if user is already logged in
+  useEffect(() => {
+    async function checkUser() {
+      const { data: { user } } = await supabase.auth.getUser();
+      setUser(user);
+      setCheckingAuth(false);
+    }
+    checkUser();
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+    });
+
+    return () => subscription.unsubscribe();
+  }, [supabase.auth]);
 
   async function handleLogin(e) {
     e.preventDefault();
@@ -39,6 +58,9 @@ export default function LoginPage() {
       provider: "google",
       options: {
         redirectTo: `${location.origin}/auth/callback`,
+        queryParams: {
+          prompt: "select_account",
+        },
       },
     });
 
@@ -49,10 +71,82 @@ export default function LoginPage() {
   }
 
   async function handleSignOut() {
+    setLoading(true);
     await supabase.auth.signOut();
+    setUser(null);
     setMessage({ type: "success", text: "Signed out successfully." });
+    setLoading(false);
   }
 
+  // Loading state
+  if (checkingAuth) {
+    return (
+      <div style={{ maxWidth: 400, margin: "100px auto", padding: 20, textAlign: "center" }}>
+        <p style={{ color: "#888" }}>Loading...</p>
+      </div>
+    );
+  }
+
+  // Logged in state
+  if (user) {
+    return (
+      <div style={{ maxWidth: 400, margin: "100px auto", padding: 20 }}>
+        <h1 style={{ marginBottom: 20 }}>Account</h1>
+
+        <div
+          style={{
+            padding: 16,
+            backgroundColor: "#f5f5f5",
+            borderRadius: 8,
+            marginBottom: 20,
+          }}
+        >
+          <p style={{ margin: 0, fontSize: 14, color: "#666" }}>Logged in as:</p>
+          <p style={{ margin: "8px 0 0", fontSize: 16, fontWeight: 500 }}>
+            {user.email}
+          </p>
+          {user.user_metadata?.name && (
+            <p style={{ margin: "4px 0 0", fontSize: 14, color: "#666" }}>
+              {user.user_metadata.name}
+            </p>
+          )}
+        </div>
+
+        {message && (
+          <div
+            style={{
+              marginBottom: 16,
+              padding: 12,
+              borderRadius: 4,
+              backgroundColor: message.type === "error" ? "#fee" : "#efe",
+              color: message.type === "error" ? "#c00" : "#060",
+            }}
+          >
+            {message.text}
+          </div>
+        )}
+
+        <button
+          onClick={handleSignOut}
+          disabled={loading}
+          style={{
+            width: "100%",
+            padding: 12,
+            fontSize: 16,
+            backgroundColor: "#dc2626",
+            color: "white",
+            border: "none",
+            borderRadius: 4,
+            cursor: loading ? "not-allowed" : "pointer",
+          }}
+        >
+          {loading ? "Signing out..." : "Sign Out"}
+        </button>
+      </div>
+    );
+  }
+
+  // Not logged in - show login form
   return (
     <div style={{ maxWidth: 400, margin: "100px auto", padding: 20 }}>
       <h1 style={{ marginBottom: 20 }}>Login</h1>
@@ -153,25 +247,6 @@ export default function LoginPage() {
           {message.text}
         </div>
       )}
-
-      <hr style={{ margin: "24px 0" }} />
-
-      <button
-        onClick={handleSignOut}
-        style={{
-          width: "100%",
-          padding: 12,
-          fontSize: 16,
-          backgroundColor: "#666",
-          color: "white",
-          border: "none",
-          borderRadius: 4,
-          cursor: "pointer",
-        }}
-      >
-        Sign Out
-      </button>
     </div>
   );
 }
-

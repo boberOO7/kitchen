@@ -51,6 +51,16 @@ export default function SkyHeader() {
         {/* Actions */}
         <div className="flex items-center gap-3">
           <ThemeToggle />
+
+          {/* Login link */}
+          <Link
+            href="/login"
+            className="hidden items-center justify-center border border-[var(--sky-header-border)] px-3 py-2 text-xs font-medium tracking-[0.04em] text-[var(--sky-header-muted)] transition hover:text-[var(--sky-header-fg)] hover:border-[var(--sky-header-fg)] sm:inline-flex"
+            style={{ borderRadius: 2 }}
+            data-cursor-magnetic
+          >
+            Увійти
+          </Link>
           
           {/* Desktop CTA */}
           <Link
@@ -116,12 +126,19 @@ export default function SkyHeader() {
                 className="mt-3 pt-3 border-t border-[var(--sky-header-border)]"
               >
                 <Link
+                  href="/login"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="block py-2.5 text-sm text-[var(--sky-header-fg)] transition hover:text-[var(--sky-accent)]"
+                >
+                  Увійти
+                </Link>
+                <Link
                   href="/configurator"
                   onClick={() => {
                     track("cta_configurator_click", { source: "mobile_menu" });
                     setMobileMenuOpen(false);
                   }}
-                  className="inline-flex w-full items-center justify-center bg-[var(--sky-accent)] px-4 py-2.5 text-sm font-medium text-[var(--sky-accent-fg)]"
+                  className="mt-2 inline-flex w-full items-center justify-center bg-[var(--sky-accent)] px-4 py-2.5 text-sm font-medium text-[var(--sky-accent-fg)]"
                   style={{ borderRadius: 2 }}
                 >
                   Зібрати кухню
