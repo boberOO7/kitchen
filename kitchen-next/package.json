@@ -6,7 +6,7 @@
     "seed": "cross-env NODE_EXTRA_CA_CERTS=/etc/ssl/certs/ca-certificates.crt tsx prisma/seed.ts"
   },
   "scripts": {
-    "dev": "NEXT_FORCE_WEBPACK_DEV=1 next dev",
+    "dev": "cross-env NODE_EXTRA_CA_CERTS=/etc/ssl/certs/ca-certificates.crt NEXT_FORCE_WEBPACK_DEV=1 next dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint"

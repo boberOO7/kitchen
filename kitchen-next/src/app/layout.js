@@ -8,6 +8,7 @@ import RouteProgress from "@/components/sky/RouteProgress";
 import FluidCursor from "@/components/sky/FluidCursor";
 import BackToTop from "@/components/sky/BackToTop";
 import { Analytics } from "@vercel/analytics/react";
+import FPSCounter from "@/components/FPSCounter";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -53,6 +54,7 @@ export default function RootLayout({ children }) {
           <SkyFooter />
         </div>
         <Analytics />
+        <FPSCounter />
       </body>
     </html>
   );

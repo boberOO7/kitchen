@@ -7,6 +7,7 @@ const globalForPrisma = globalThis;
 
 function makeClient() {
   const connectionString = process.env.DATABASE_URL;
+  console.log("[Prisma] DATABASE_URL starts with:", connectionString?.slice(0, 30) + "...");
   if (!connectionString) {
     throw new Error("Missing DATABASE_URL. Add it to kitchen-next/.env (copy from env.sample).");
   }
@@ -14,14 +15,11 @@ function makeClient() {
   // Create pg Pool with SSL config for Supabase
   const pool = new pg.Pool({
     connectionString,
-    ssl: {
-      rejectUnauthorized: false, // Required for Supabase connection
-    },
+    ssl: true,
   });
 
-  return new PrismaClient({
-    adapter: new PrismaPg({ pool }),
-  });
+  const adapter = new PrismaPg(pool);
+  return new PrismaClient({ adapter });
 }
 
 export const prisma = globalForPrisma.__prisma ?? makeClient();
