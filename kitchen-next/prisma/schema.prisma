@@ -48,7 +48,7 @@ model Product {
   sku         String?     @unique
   name        String
   description String?
-  priceCents  Int
+  price       Int
   currency    String      @default("USD")
   isActive    Boolean     @default(true)
   imageKey    String?  // "products/xxx.png" (Supabase Storage)
@@ -58,16 +58,16 @@ model Product {
 }
 
 model OrderItem {
-  id             String   @id @default(uuid())
-  orderId        String
-  productId      String?
-  name           String
-  unitPriceCents Int
-  quantity       Int      @default(1)
-  totalCents     Int
-  configId       String?
-  order          Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  product        Product? @relation(fields: [productId], references: [id])
+  id         String   @id @default(uuid())
+  orderId    String
+  productId  String?
+  name       String
+  unitPrice  Int
+  quantity   Int      @default(1)
+  total      Int
+  configId   String?
+  order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product    Product? @relation(fields: [productId], references: [id])
 
   @@index([orderId])
   @@index([productId])
@@ -78,9 +78,9 @@ model Order {
   userId          String
   projectId       String?
   status          OrderStatus @default(DRAFT)
-  currency        String      @default("UAH")
-  subtotalCents   Int         @default(0)
-  totalCents      Int         @default(0)
+  currency        String      @default("USD")
+  subtotal        Int         @default(0)
+  total           Int         @default(0)
   activePaymentId String?     @unique
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
@@ -99,8 +99,8 @@ model Payment {
   orderId        String
   provider       PaymentProvider @default(MONOBANK)
   status         PaymentStatus   @default(CREATED)
-  amountCents    Int
-  currency       String          @default("UAH")
+  amount         Int
+  currency       String          @default("USD")
   providerRef    String?         @unique
   webhookEventId String?         @unique
   raw            Json?

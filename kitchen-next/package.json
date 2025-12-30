@@ -2,6 +2,9 @@
   "name": "kitchen-next",
   "version": "0.1.0",
   "private": true,
+  "prisma": {
+    "seed": "cross-env NODE_EXTRA_CA_CERTS=/etc/ssl/certs/ca-certificates.crt tsx prisma/seed.ts"
+  },
   "scripts": {
     "dev": "NEXT_FORCE_WEBPACK_DEV=1 next dev",
     "build": "next build",
@@ -27,8 +30,12 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@types/node": "^22",
+    "cross-env": "^10.1.0",
     "eslint": "^9",
     "eslint-config-next": "16.0.8",
-    "tailwindcss": "^4"
+    "tailwindcss": "^4",
+    "tsx": "^4",
+    "typescript": "^5"
   }
 }
