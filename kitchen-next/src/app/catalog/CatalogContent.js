@@ -41,13 +41,13 @@ export default function CatalogContent({ products }) {
       {/* Products grid */}
       <section className="bg-[var(--sky-bg)] py-16 sm:py-20">
         <div className="mx-auto max-w-[1200px] px-4 sm:px-6">
-          <StaggerContainer staggerDelay={0.08} className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          <StaggerContainer staggerDelay={0.08} className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {products.map((p) => (
               <StaggerItem key={p.slug} variant="fadeUp">
                 <Link
                   href="/configurator"
                   onClick={() => track("cta_configurator_click", { source: "catalog_product_card", product: p.slug })}
-                  className="group block overflow-hidden border border-[var(--sky-card-border)] bg-[var(--sky-card-bg)] shadow-[var(--sky-shadow)] transition-shadow duration-300 hover:shadow-lg"
+                  className="group flex h-full flex-col overflow-hidden border border-[var(--sky-card-border)] bg-[var(--sky-card-bg)] shadow-[var(--sky-shadow)] transition-shadow duration-300 hover:shadow-lg"
                   style={{ borderRadius: 3 }}
                 >
                   {/* Image */}
@@ -74,11 +74,11 @@ export default function CatalogContent({ products }) {
                   </div>
 
                   {/* Content */}
-                  <div className="p-5">
+                  <div className="flex-1 p-5">
                     <h2 className="text-lg font-medium tracking-[-0.01em] text-[var(--sky-fg)]">
                       {p.name}
                     </h2>
-                    <p className="mt-1.5 text-sm leading-relaxed text-[var(--sky-muted)]">
+                    <p className="mt-1.5 line-clamp-2 text-sm leading-relaxed text-[var(--sky-muted)]">
                       {p.tagline}
                     </p>
 

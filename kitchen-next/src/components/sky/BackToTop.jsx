@@ -1,38 +1,44 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 
 export default function BackToTop() {
   const [isVisible, setIsVisible] = useState(false);
+  const scrollingToTopRef = useRef(false);
 
   useEffect(() => {
     const toggleVisibility = () => {
-      // Show button when page is scrolled down 400px
-      if (window.scrollY > 400) {
-        setIsVisible(true);
-      } else {
-        setIsVisible(false);
+      const scrollY = window.scrollY;
+      
+      // If we're scrolling to top, wait until we reach the top to reset
+      if (scrollingToTopRef.current) {
+        if (scrollY < 10) {
+          scrollingToTopRef.current = false;
+        }
+        return; // Don't change visibility while scrolling to top
       }
+      
+      // Normal behavior: show button when scrolled down 400px
+      setIsVisible(scrollY > 400);
     };
 
     window.addEventListener("scroll", toggleVisibility, { passive: true });
-
-    return () => {
-      window.removeEventListener("scroll", toggleVisibility);
-    };
+    return () => window.removeEventListener("scroll", toggleVisibility);
   }, []);
 
   const scrollToTop = () => {
-    const duration = 800; // ms
+    // Mark that we're scrolling to top and hide immediately
+    scrollingToTopRef.current = true;
+    setIsVisible(false);
+    
+    const duration = 800;
     const start = window.scrollY;
     const startTime = performance.now();
 
     const animateScroll = (currentTime) => {
       const elapsed = currentTime - startTime;
       const progress = Math.min(elapsed / duration, 1);
-      
-      // Easing function (ease-out-cubic)
       const easeOut = 1 - Math.pow(1 - progress, 3);
       
       window.scrollTo(0, start * (1 - easeOut));
@@ -40,6 +46,7 @@ export default function BackToTop() {
       if (progress < 1) {
         requestAnimationFrame(animateScroll);
       }
+      // Note: scrollingToTopRef is reset by the scroll handler when scrollY < 10
     };
 
     requestAnimationFrame(animateScroll);
@@ -55,7 +62,7 @@ export default function BackToTop() {
           transition={{ duration: 0.25, ease: "easeOut" }}
           onClick={scrollToTop}
           data-cursor-magnetic
-          className="fixed bottom-8 right-8 z-40 flex h-12 w-12 items-center justify-center border border-[var(--sky-border)] bg-[var(--sky-surface)] text-[var(--sky-fg)] shadow-lg backdrop-blur-sm transition-all hover:bg-[var(--sky-accent)] hover:text-[var(--sky-accent-fg)] hover:shadow-xl"
+          className="fixed bottom-8 right-8 z-40 flex h-12 w-12 items-center justify-center border border-[var(--sky-border)] bg-[var(--sky-surface)] text-[var(--sky-fg)] shadow-lg backdrop-blur-sm transition-colors hover:bg-[var(--sky-accent)] hover:text-[var(--sky-accent-fg)] hover:shadow-xl"
           style={{ borderRadius: 2 }}
           aria-label="Back to top"
           title="Повернутися до початку"

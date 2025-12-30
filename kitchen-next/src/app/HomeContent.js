@@ -188,12 +188,12 @@ export default function HomeContent({ products }) {
           </AnimateOnScroll>
 
           {/* Product cards — staggered animation */}
-          <StaggerContainer staggerDelay={0.08} className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <StaggerContainer staggerDelay={0.08} className="mt-10 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {products.slice(0, 6).map((p) => (
               <StaggerItem key={p.slug} variant="fadeUp">
                 <Link
                   href="/configurator"
-                  className="group relative block overflow-hidden border border-[var(--sky-card-border)] bg-[var(--sky-card-bg)] shadow-[var(--sky-shadow)] transition-shadow duration-300 hover:shadow-lg"
+                  className="group relative flex h-full flex-col overflow-hidden border border-[var(--sky-card-border)] bg-[var(--sky-card-bg)] shadow-[var(--sky-shadow)] transition-shadow duration-300 hover:shadow-lg"
                   style={{ borderRadius: 3 }}
                   data-cursor-magnetic
                 >
@@ -222,11 +222,11 @@ export default function HomeContent({ products }) {
                   </div>
 
                   {/* Content */}
-                  <div className="p-5">
+                  <div className="flex-1 p-5">
                     <h3 className="text-lg font-medium tracking-[-0.01em] text-[var(--sky-fg)]">
                       {p.name}
                     </h3>
-                    <p className="mt-1.5 text-sm leading-relaxed text-[var(--sky-muted)]">
+                    <p className="mt-1.5 line-clamp-2 text-sm leading-relaxed text-[var(--sky-muted)]">
                       {p.tagline}
                     </p>
 
