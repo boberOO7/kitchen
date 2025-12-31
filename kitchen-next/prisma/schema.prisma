@@ -1,0 +1,137 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id         String    @id @default(uuid())
+  email      String    @unique
+  name       String?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  authUserId String    @unique
+  orders     Order[]
+  projects   Project[]
+}
+
+model Project {
+  id        String          @id @default(uuid())
+  userId    String
+  title     String
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+  configs   KitchenConfig[]
+  orders    Order[]
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model KitchenConfig {
+  id          String   @id @default(uuid())
+  projectId   String
+  version     Int      @default(1)
+  state       Json
+  snapshotUrl String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+}
+
+model Product {
+  id          String      @id @default(uuid())
+  sku         String?     @unique
+  name        String
+  description String?
+  price       Int
+  currency    String      @default("USD")
+  isActive    Boolean     @default(true)
+  imageKey    String?  // "products/xxx.png" (Supabase Storage)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  items       OrderItem[]
+}
+
+model OrderItem {
+  id         String   @id @default(uuid())
+  orderId    String
+  productId  String?
+  name       String
+  unitPrice  Int
+  quantity   Int      @default(1)
+  total      Int
+  configId   String?
+  order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product    Product? @relation(fields: [productId], references: [id])
+
+  @@index([orderId])
+  @@index([productId])
+}
+
+model Order {
+  id              String      @id @default(uuid())
+  userId          String
+  projectId       String?
+  status          OrderStatus @default(DRAFT)
+  currency        String      @default("USD")
+  subtotal        Int         @default(0)
+  total           Int         @default(0)
+  activePaymentId String?     @unique
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  activePayment   Payment?    @relation("ActivePayment", fields: [activePaymentId], references: [id])
+  project         Project?    @relation(fields: [projectId], references: [id])
+  user            User        @relation(fields: [userId], references: [id])
+  items           OrderItem[]
+  payments        Payment[]   @relation("OrderPayments")
+
+  @@index([userId])
+  @@index([projectId])
+}
+
+model Payment {
+  id             String          @id @default(uuid())
+  orderId        String
+  provider       PaymentProvider @default(MONOBANK)
+  status         PaymentStatus   @default(CREATED)
+  amount         Int
+  currency       String          @default("USD")
+  providerRef    String?         @unique
+  webhookEventId String?         @unique
+  raw            Json?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  activeFor      Order?          @relation("ActivePayment")
+  order          Order           @relation("OrderPayments", fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@index([provider])
+  @@index([status])
+}
+
+enum OrderStatus {
+  DRAFT
+  PENDING_PAYMENT
+  PAID
+  CANCELLED
+  REFUNDED
+}
+
+enum PaymentProvider {
+  MONOBANK
+  STRIPE
+}
+
+enum PaymentStatus {
+  CREATED
+  PENDING
+  SUCCEEDED
+  FAILED
+  CANCELED
+  REFUNDED
+}

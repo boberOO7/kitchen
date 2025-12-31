@@ -1,3 +1,5 @@
+// не видаляти цей файл, він використовується для тестування
+// Цікава штука з highlights, можна буде потім подумати
 export const SKY_PRODUCTS = [
   {
     slug: "sky-linea",
@@ -5,7 +7,7 @@ export const SKY_PRODUCTS = [
     tagline: "Чисті лінії, матові фасади, тиха фурнітура.",
     priceFrom: 5900,
     highlights: ["Матове скло", "Схована ручка Gola", "Soft-close"],
-    image: "https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=800&q=80",
+    image: "/assets/kitchens/sky-linea.jpg",
   },
   {
     slug: "sky-nero",
@@ -13,7 +15,7 @@ export const SKY_PRODUCTS = [
     tagline: "Глибокий графіт з акцентами металу.",
     priceFrom: 7200,
     highlights: ["Антрацит", "Кварц-стільниця", "Підсвітка профілю"],
-    image: "https://images.unsplash.com/photo-1556909172-54557c7e4fb7?w=800&q=80",
+    image: "/assets/kitchens/sky-nero.jpg",
   },
   {
     slug: "sky-oak",
@@ -21,7 +23,7 @@ export const SKY_PRODUCTS = [
     tagline: "Теплий шпон, мінімум деталей, максимум тактильності.",
     priceFrom: 6400,
     highlights: ["Шпон дуба", "Сатин-лак", "Фасади без фрези"],
-    image: "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?w=800&q=80",
+    image: "/assets/kitchens/sky-oak.jpg",
   },
   {
     slug: "sky-ice",
@@ -29,7 +31,7 @@ export const SKY_PRODUCTS = [
     tagline: "Світла кухня з каменем та акуратною геометрією.",
     priceFrom: 6100,
     highlights: ["Білий кварц", "Приховані плінтуси", "Чисті стики"],
-    image: "https://images.unsplash.com/photo-1600566753190-17f0baa2a6c3?w=800&q=80",
+    image: "/assets/kitchens/sky-ice.jpg",
   },
   {
     slug: "sky-studio",
@@ -37,7 +39,7 @@ export const SKY_PRODUCTS = [
     tagline: "Компактні модулі для студій та апартаментів.",
     priceFrom: 4200,
     highlights: ["Модульність", "Оптимізація зберігання", "Лаконічний дизайн"],
-    image: "https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?w=800&q=80",
+    image: "/assets/kitchens/sky-studio.jpg",
   },
   {
     slug: "sky-signature",
@@ -45,6 +47,7 @@ export const SKY_PRODUCTS = [
     tagline: "Преміум-композиція з індивідуальними матеріалами.",
     priceFrom: 9800,
     highlights: ["Під замовлення", "Преміум-фурнітура", "Індивідуальна палітра"],
-    image: "https://images.unsplash.com/photo-1600566753086-00f18fb6b3ea?w=800&q=80",
+    image: "/assets/kitchens/sky-signature.jpg",
   },
 ];
+

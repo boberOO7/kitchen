@@ -1,14 +1,49 @@
 @import "tailwindcss";
 
 /* ═══════════════════════════════════════════════════════════════════════════
+   CUSTOM CURSOR - Hide system cursor
+   ═══════════════════════════════════════════════════════════════════════════ */
+/* Force-hide system cursor everywhere (Chrome/Edge safe) */
+html,
+body,
+*,
+*::before,
+*::after {
+  cursor: none !important;
+}
+
+/* Optional escape hatch if needed later */
+.allow-system-cursor,
+.allow-system-cursor * {
+  cursor: auto !important;
+}
+
+/* SKY preloaders */
+@keyframes sky-preloader-sweep {
+  0% {
+    transform: translateX(-120%);
+  }
+  50% {
+    transform: translateX(220%);
+  }
+  100% {
+    transform: translateX(-120%);
+  }
+}
+
+.sky-preloader-sweep {
+  animation: sky-preloader-sweep 1.2s ease-in-out infinite;
+  will-change: transform;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
    SKY KITCHENS — Luxury Minimal Design System
-   4 Palettes: Monochrome, Warm Sand, Cool Slate, Forest
-   Each palette has light + dark mode
+   4 Palettes × 2 Modes (Light/Dark) = 8 themes
    ═══════════════════════════════════════════════════════════════════════════ */
 
 @layer base {
   /* ─────────────────────────────────────────────────────────────────────────
-     PALETTE: MONOCHROME (default) — LIGHT
+     PALETTE: MONOCHROME — LIGHT (default)
      ───────────────────────────────────────────────────────────────────────── */
   :root,
   :root[data-palette="mono"][data-theme="light"] {
@@ -26,13 +61,11 @@
     --sky-card-border: rgba(0, 0, 0, 0.08);
     --sky-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 4px 12px rgba(0,0,0,0.04);
     
-    /* Hero — always dark for impact */
     --sky-hero-bg: #0a0a0a;
     --sky-hero-fg: #fafafa;
     --sky-hero-muted: rgba(255, 255, 255, 0.7);
     --sky-hero-accent: #404040;
     
-    /* Header — LIGHT theme: light header */
     --sky-header-bg: rgba(255, 255, 255, 0.92);
     --sky-header-border: rgba(0, 0, 0, 0.08);
     --sky-header-fg: #0a0a0a;
@@ -41,9 +74,7 @@
     --sky-header-surface-hover: #ebebeb;
   }
 
-  /* ─────────────────────────────────────────────────────────────────────────
-     PALETTE: MONOCHROME — DARK
-     ───────────────────────────────────────────────────────────────────────── */
+  /* MONOCHROME — DARK */
   :root[data-palette="mono"][data-theme="dark"],
   :root[data-theme="dark"]:not([data-palette]) {
     --sky-bg: #0a0a0a;
@@ -65,7 +96,6 @@
     --sky-hero-muted: rgba(255, 255, 255, 0.65);
     --sky-hero-accent: #404040;
     
-    /* Header — DARK theme: dark header */
     --sky-header-bg: rgba(10, 10, 10, 0.92);
     --sky-header-border: rgba(255, 255, 255, 0.08);
     --sky-header-fg: #fafafa;
@@ -105,9 +135,7 @@
     --sky-header-surface-hover: #ebe5db;
   }
 
-  /* ─────────────────────────────────────────────────────────────────────────
-     PALETTE: WARM SAND — DARK
-     ───────────────────────────────────────────────────────────────────────── */
+  /* WARM SAND — DARK */
   :root[data-palette="warm"][data-theme="dark"] {
     --sky-bg: #1c1917;
     --sky-bg-alt: #292524;
@@ -167,9 +195,7 @@
     --sky-header-surface-hover: #e2e8f0;
   }
 
-  /* ─────────────────────────────────────────────────────────────────────────
-     PALETTE: COOL SLATE — DARK
-     ───────────────────────────────────────────────────────────────────────── */
+  /* COOL SLATE — DARK */
   :root[data-palette="slate"][data-theme="dark"] {
     --sky-bg: #0f172a;
     --sky-bg-alt: #1e293b;
@@ -229,9 +255,7 @@
     --sky-header-surface-hover: #dfe4df;
   }
 
-  /* ─────────────────────────────────────────────────────────────────────────
-     PALETTE: FOREST — DARK
-     ───────────────────────────────────────────────────────────────────────── */
+  /* FOREST — DARK */
   :root[data-palette="forest"][data-theme="dark"] {
     --sky-bg: #14261c;
     --sky-bg-alt: #1a3324;
@@ -263,9 +287,57 @@
   /* ─────────────────────────────────────────────────────────────────────────
      BASE STYLES
      ───────────────────────────────────────────────────────────────────────── */
-  html,
-  body {
+  html {
+    scroll-behavior: smooth;
+  }
+
+  /* Accessible focus styles (subtle, theme-aware) */
+  a:focus-visible,
+  button:focus-visible,
+  [role="button"]:focus-visible,
+  input:focus-visible,
+  textarea:focus-visible,
+  select:focus-visible {
+    outline: 2px solid color-mix(in oklab, var(--sky-accent) 80%, transparent);
+    outline-offset: 3px;
+  }
+
+  html, body {
     height: 100%;
+  }
+
+  /* ─────────────────────────────────────────────────────────────────────────
+     SCROLLBAR (delicate, theme-aware)
+     ───────────────────────────────────────────────────────────────────────── */
+  /* Firefox */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in oklab, var(--sky-accent) 55%, transparent) transparent;
+  }
+
+  /* WebKit (Chrome, Edge, Safari) */
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    background-color: color-mix(in oklab, var(--sky-accent) 35%, transparent);
+    border-radius: 999px;
+    border: 3px solid transparent;
+    background-clip: content-box;
+  }
+
+  *::-webkit-scrollbar-thumb:hover {
+    background-color: color-mix(in oklab, var(--sky-accent) 55%, transparent);
+  }
+
+  *::-webkit-scrollbar-corner {
+    background: transparent;
   }
 
   body {
@@ -279,7 +351,7 @@
     color: var(--sky-accent-fg);
   }
 
-  /* Subtle noise texture overlay */
+  /* Subtle noise texture */
   body::before {
     content: "";
     position: fixed;
@@ -288,20 +360,5 @@
     pointer-events: none;
     opacity: 0.018;
     background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
-  }
-}
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   UTILITY CLASSES
-   ═══════════════════════════════════════════════════════════════════════════ */
-@layer utilities {
-  .radius-luxury {
-    border-radius: 2px;
-  }
-  .radius-luxury-sm {
-    border-radius: 1px;
-  }
-  .radius-luxury-lg {
-    border-radius: 3px;
   }
 }

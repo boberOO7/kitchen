@@ -2,16 +2,27 @@
   "name": "kitchen-next",
   "version": "0.1.0",
   "private": true,
+  "prisma": {
+    "seed": "cross-env NODE_EXTRA_CA_CERTS=/etc/ssl/certs/ca-certificates.crt tsx prisma/seed.ts"
+  },
   "scripts": {
-    "dev": "NEXT_FORCE_WEBPACK_DEV=1 next dev",
+    "dev": "cross-env NODE_EXTRA_CA_CERTS=/etc/ssl/certs/ca-certificates.crt NEXT_FORCE_WEBPACK_DEV=1 next dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint"
   },
   "dependencies": {
+    "@prisma/adapter-pg": "^7.2.0",
+    "@prisma/client": "^7.2.0",
     "@react-three/drei": "^10.7.7",
     "@react-three/fiber": "^9.4.2",
+    "@supabase/ssr": "^0.8.0",
+    "@supabase/supabase-js": "^2.89.0",
+    "@vercel/analytics": "^1.6.1",
+    "framer-motion": "^12.23.26",
     "next": "16.0.8",
+    "pg": "^8.16.3",
+    "prisma": "^7.2.0",
     "react": "19.2.1",
     "react-dom": "19.2.1",
     "three": "^0.181.2",
@@ -19,8 +30,12 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@types/node": "^22",
+    "cross-env": "^10.1.0",
     "eslint": "^9",
     "eslint-config-next": "16.0.8",
-    "tailwindcss": "^4"
+    "tailwindcss": "^4",
+    "tsx": "^4",
+    "typescript": "^5"
   }
 }

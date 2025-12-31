@@ -1,7 +1,16 @@
+import { Suspense } from "react";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import SkyHeader from "@/components/sky/SkyHeader";
 import SkyFooter from "@/components/sky/SkyFooter";
+import Preloader from "@/components/sky/Preloader";
+import RouteProgress from "@/components/sky/RouteProgress";
+import FluidCursor from "@/components/sky/FluidCursor";
+import BackToTop from "@/components/sky/BackToTop";
+import { Analytics } from "@vercel/analytics/react";
+import FPSCounter from "@/components/FPSCounter";
+import { CartProvider } from "@/contexts/CartContext";
+import CartDrawer from "@/components/cart/CartDrawer";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -35,11 +44,22 @@ export default function RootLayout({ children }) {
         />
       </head>
       <body className={`${inter.variable} font-sans antialiased`}>
-        <div className="flex min-h-dvh flex-col bg-[var(--sky-bg)] text-[var(--sky-fg)]">
-          <SkyHeader />
-          <main className="flex-1">{children}</main>
-          <SkyFooter />
-        </div>
+        <CartProvider>
+          <FluidCursor />
+          <BackToTop />
+          <Preloader />
+          <Suspense fallback={null}>
+            <RouteProgress />
+          </Suspense>
+          <div className="flex min-h-dvh flex-col bg-[var(--sky-bg)] text-[var(--sky-fg)]">
+            <SkyHeader />
+            <main className="flex-1">{children}</main>
+            <SkyFooter />
+          </div>
+          <CartDrawer />
+          <Analytics />
+          <FPSCounter />
+        </CartProvider>
       </body>
     </html>
   );

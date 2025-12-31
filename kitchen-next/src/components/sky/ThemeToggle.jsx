@@ -4,6 +4,14 @@ import { useEffect, useState } from "react";
 
 const THEME_KEY = "sky-theme";
 const PALETTE_KEY = "sky-palette";
+const VIDEO_KEY = "sky-video";
+const MAGNET_KEY = "sky-magnet";
+
+const MAGNET_MODES = [
+  { id: "free", label: "Free" },
+  { id: "field", label: "Field" },
+  { id: "off", label: "Off" },
+];
 
 const PALETTES = [
   { id: "mono", label: "Mono", color: "#0a0a0a" },
@@ -18,16 +26,24 @@ function getInitial(key, fallback) {
 }
 
 export default function ThemeToggle() {
+  const [mounted, setMounted] = useState(false);
   const [theme, setTheme] = useState(() => getInitial(THEME_KEY, "dark"));
   const [palette, setPalette] = useState(() => getInitial(PALETTE_KEY, "mono"));
+  const [videoEnabled, setVideoEnabled] = useState(true);
+  const [magnetMode, setMagnetMode] = useState("free");
   const [showPalettes, setShowPalettes] = useState(false);
 
   useEffect(() => {
+    setMounted(true);
     try {
       const storedTheme = localStorage.getItem(THEME_KEY);
       const storedPalette = localStorage.getItem(PALETTE_KEY);
+      const storedVideo = localStorage.getItem(VIDEO_KEY);
+      const storedMagnet = localStorage.getItem(MAGNET_KEY);
       if (storedTheme) setTheme(storedTheme);
       if (storedPalette) setPalette(storedPalette);
+      if (storedVideo !== null) setVideoEnabled(storedVideo === "true");
+      if (storedMagnet) setMagnetMode(storedMagnet);
     } catch {}
   }, []);
 
@@ -43,11 +59,76 @@ export default function ThemeToggle() {
     try { localStorage.setItem(PALETTE_KEY, palette); } catch {}
   }, [palette]);
 
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    document.documentElement.dataset.video = videoEnabled ? "on" : "off";
+    try { localStorage.setItem(VIDEO_KEY, String(videoEnabled)); } catch {}
+    // Dispatch custom event for page.js to listen
+    window.dispatchEvent(new CustomEvent("sky-video-change", { detail: videoEnabled }));
+  }, [videoEnabled]);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    try { localStorage.setItem(MAGNET_KEY, magnetMode); } catch {}
+    window.dispatchEvent(new CustomEvent("sky-magnet-change", { detail: magnetMode }));
+  }, [magnetMode]);
+
   const currentPalette = PALETTES.find(p => p.id === palette) || PALETTES[0];
+  const currentMagnet = MAGNET_MODES.find((m) => m.id === magnetMode) || MAGNET_MODES[0];
+
+  // Avoid hydration mismatch: server can't know localStorage-based palette/theme.
+  // Render a fixed-size placeholder until mounted so SSR and first client render match.
+  if (!mounted) {
+    return (
+      <div className="relative flex items-center gap-2" aria-hidden="true">
+        <div
+          className="h-8 w-[140px] border border-[var(--sky-header-border)] bg-[var(--sky-header-surface)]"
+          style={{ borderRadius: 2 }}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="relative flex items-center gap-2">
-      {/* Theme toggle (dark/light) */}
+      {/* Magnetism mode toggle */}
+      <button
+        type="button"
+        onClick={() => {
+          const idx = MAGNET_MODES.findIndex((m) => m.id === magnetMode);
+          const next = MAGNET_MODES[(idx + 1) % MAGNET_MODES.length]?.id || "free";
+          setMagnetMode(next);
+        }}
+        className="flex h-8 items-center gap-2 border border-[var(--sky-header-border)] bg-[var(--sky-header-surface)] px-2.5 text-[var(--sky-header-fg)] transition hover:bg-[var(--sky-header-surface-hover)]"
+        style={{ borderRadius: 2 }}
+        aria-label="Magnetism mode"
+        title={`Magnet: ${currentMagnet.label}`}
+      >
+        <span className="text-[11px] tracking-[0.08em] opacity-80">MAG</span>
+        <span className="hidden text-xs sm:inline">{currentMagnet.label}</span>
+      </button>
+
+      {/* Video toggle */}
+      <button
+        type="button"
+        onClick={() => setVideoEnabled((v) => !v)}
+        className="flex h-8 items-center gap-1.5 border border-[var(--sky-header-border)] bg-[var(--sky-header-surface)] px-2.5 text-[var(--sky-header-fg)] transition hover:bg-[var(--sky-header-surface-hover)]"
+        style={{ borderRadius: 2 }}
+        aria-label={videoEnabled ? "Disable video background" : "Enable video background"}
+        title={videoEnabled ? "Вимкнути відео" : "Увімкнути відео"}
+      >
+        {videoEnabled ? (
+          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5l4.72-4.72a.75.75 0 011.28.53v11.38a.75.75 0 01-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25h-9A2.25 2.25 0 002.25 7.5v9a2.25 2.25 0 002.25 2.25z" />
+          </svg>
+        ) : (
+          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5l4.72-4.72a.75.75 0 011.28.53v11.38a.75.75 0 01-1.28.53l-4.72-4.72M12 18.75H4.5a2.25 2.25 0 01-2.25-2.25V9m12.841 9.091L16.5 19.5m-1.409-1.409c.407-.407.659-.97.659-1.591v-9a2.25 2.25 0 00-2.25-2.25h-9c-.621 0-1.184.252-1.591.659m10.591 10.591L4.659 7.409" />
+          </svg>
+        )}
+      </button>
+
+      {/* Theme toggle */}
       <button
         type="button"
         onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
@@ -121,3 +202,4 @@ export default function ThemeToggle() {
     </div>
   );
 }
+

@@ -2,41 +2,107 @@
 
 import React, { useMemo, useState } from "react";
 import { Canvas } from "@react-three/fiber";
-import { Bounds, ContactShadows, Environment, OrbitControls } from "@react-three/drei";
+import { Bounds, ContactShadows, Environment, OrbitControls, useProgress } from "@react-three/drei";
 import * as THREE from "three";
 
-import SwatchPicker from "@/components/UI/SwatchPicker";
-import AccordionSection from "@/components/UI/AccordionSection";
 import DesignerKitchen from "@/components/DesignerKitchen";
 import { MODEL_BY_FACADE } from "@/data/constants";
+import { CARCASS_SETS, FACADE_SETS, TOP_SETS } from "@/data/configuratorOptions";
+import { useConfiguratorStore } from "@/stores/useConfiguratorStore";
+import { useCart } from "@/contexts/CartContext";
 
-const FACADE_SETS = [
-  { id: "wood", label: "Дуб · глянець", value: { base: "/assets/textures/wood_d.jpg" } },
-  { id: "graphite", label: "Дуб · сірий", value: { base: "/assets/textures/wood_r1.jpg" } },
-  { id: "white", label: "Білий · мат", value: { base: "/assets/textures/white_d.jpg" } },
-];
+// Price formatter
+function formatPrice(price) {
+  return new Intl.NumberFormat("uk-UA").format(price);
+}
 
-const TOP_SETS = [
-  { id: "quartz_white", label: "Білий кварц", value: "#efefef" },
-  { id: "dark_slate", label: "Темний сланець", value: "#222629" },
-];
-
-const CARCASS_SETS = [
-  { id: "carc_white", label: "Білий", value: "#e9ecef" },
-  { id: "carc_grey", label: "Світло-сірий", value: "#dcdfe3" },
-  { id: "carc_graph", label: "Графіт", value: "#3c4043" },
-];
+// 3D Model Loading overlay
+function ModelLoader() {
+  const { active, progress, loaded, total } = useProgress();
+  
+  if (!active) return null;
+  
+  return (
+    <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-[var(--sky-bg-alt)]/95 backdrop-blur-sm">
+      {/* Spinner */}
+      <div className="relative h-16 w-16">
+        <svg
+          className="animate-spin"
+          viewBox="0 0 50 50"
+          style={{ animation: "spin 1.2s linear infinite" }}
+        >
+          <circle
+            cx="25"
+            cy="25"
+            r="20"
+            fill="none"
+            stroke="var(--sky-border)"
+            strokeWidth="3"
+          />
+          <circle
+            cx="25"
+            cy="25"
+            r="20"
+            fill="none"
+            stroke="var(--sky-accent)"
+            strokeWidth="3"
+            strokeLinecap="round"
+            strokeDasharray={`${progress * 1.26}, 126`}
+            style={{ transition: "stroke-dasharray 0.3s ease" }}
+          />
+        </svg>
+      </div>
+      
+      {/* Progress text */}
+      <div className="mt-4 text-center">
+        <div className="text-sm font-medium text-[var(--sky-fg)]">
+          Завантаження моделі
+        </div>
+        <div className="mt-1 text-2xl font-light tracking-tight text-[var(--sky-fg)]">
+          {Math.round(progress)}%
+        </div>
+        {total > 0 && (
+          <div className="mt-1 text-[10px] text-[var(--sky-muted)]">
+            {loaded} / {total} ресурсів
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 const MODEL_SCALE = [1, 1, 1];
 const MODEL_POS = [1.25, 0, 0];
 
-export default function KitchenConfigurator({ mode = "embedded" }) {
-  const [openId, setOpenId] = useState("facade");
+function makeChipStyle(opt) {
+  const v = opt?.value;
+  if (typeof v === "string" && v.trim().startsWith("#")) {
+    return { background: v };
+  }
+  if (typeof v === "string") {
+    return { backgroundImage: `url(${v})`, backgroundSize: "cover", backgroundPosition: "center" };
+  }
+  if (v && typeof v === "object") {
+    const thumb = opt.thumb || v.base || v.diffuse || v.albedo || v.colorMap || null;
+    if (typeof thumb === "string") {
+      if (thumb.trim().startsWith("#")) return { background: thumb };
+      return { backgroundImage: `url(${thumb})`, backgroundSize: "cover", backgroundPosition: "center" };
+    }
+  }
+  return { background: "linear-gradient(135deg, #e8e8e8 0%, #f5f5f5 50%, #e0e0e0 100%)" };
+}
 
-  const [facadeId, setFacadeId] = useState(FACADE_SETS[1].id);
-  const modelUrl = MODEL_BY_FACADE[facadeId];
-  const [topId, setTopId] = useState(TOP_SETS[0].id);
-  const [carcassId, setCarcassId] = useState(CARCASS_SETS[0].id);
+export default function KitchenConfigurator({ mode = "embedded", product = null }) {
+  const [openSection, setOpenSection] = useState("facade");
+  const [isAddingToCart, setIsAddingToCart] = useState(false);
+  const { addToCart, isPending } = useCart();
+
+  const facadeId = useConfiguratorStore((s) => s.facadeId);
+  const topId = useConfiguratorStore((s) => s.topId);
+  const carcassId = useConfiguratorStore((s) => s.carcassId);
+  const setFacadeId = useConfiguratorStore((s) => s.setFacade);
+  const setTopId = useConfiguratorStore((s) => s.setTop);
+  const setCarcassId = useConfiguratorStore((s) => s.setCarcass);
 
   const facadeLabel = useMemo(() => FACADE_SETS.find((x) => x.id === facadeId)?.label ?? "", [facadeId]);
   const topLabel = useMemo(() => TOP_SETS.find((x) => x.id === topId)?.label ?? "", [topId]);
@@ -44,16 +110,18 @@ export default function KitchenConfigurator({ mode = "embedded" }) {
 
   const isFullscreen = mode === "fullscreen";
 
+  const sections = [
+    { id: "facade", title: "Фасад", summary: facadeLabel, options: FACADE_SETS, value: facadeId, onChange: setFacadeId },
+    { id: "top", title: "Стільниця", summary: topLabel, options: TOP_SETS, value: topId, onChange: setTopId },
+    { id: "carcass", title: "Корпус", summary: carcassLabel, options: CARCASS_SETS, value: carcassId, onChange: setCarcassId },
+  ];
+
   return (
     <div className={`flex h-full ${isFullscreen ? "flex-row" : "flex-col gap-4 lg:flex-row"}`}>
-      {/* ─────────────────────────────────────────────────────────────────────
-          SIDEBAR PANEL
-          ───────────────────────────────────────────────────────────────────── */}
+      {/* Sidebar Panel */}
       <aside
         className={`shrink-0 overflow-y-auto border-[var(--sky-border)] bg-[var(--sky-surface)] ${
-          isFullscreen
-            ? "w-[320px] border-r"
-            : "w-full border lg:w-[340px]"
+          isFullscreen ? "w-[320px] border-r" : "w-full border lg:w-[340px]"
         }`}
         style={{ borderRadius: isFullscreen ? 0 : 3 }}
       >
@@ -69,69 +137,153 @@ export default function KitchenConfigurator({ mode = "embedded" }) {
             </div>
           </div>
 
-          {/* Accordions */}
-          <AccordionSection
-            id="facade"
-            title="Фасад"
-            openId={openId}
-            setOpenId={setOpenId}
-            summary={facadeLabel}
-          >
-            <SwatchPicker options={FACADE_SETS} value={facadeId} onChange={setFacadeId} />
-          </AccordionSection>
+          {/* Accordion Sections */}
+          {sections.map((section) => {
+            const isOpen = openSection === section.id;
+            return (
+              <div
+                key={section.id}
+                className="mb-2 overflow-hidden border border-[var(--sky-border)] bg-[var(--sky-card-bg)]"
+                style={{ borderRadius: 2 }}
+              >
+                <button
+                  type="button"
+                  className="flex w-full items-center justify-between gap-3 bg-transparent px-4 py-3 text-left transition hover:bg-[var(--sky-bg-alt)]"
+                  onClick={() => setOpenSection(isOpen ? null : section.id)}
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm font-medium text-[var(--sky-fg)]">{section.title}</div>
+                    {section.summary && (
+                      <div className="mt-0.5 truncate text-xs text-[var(--sky-muted)]">{section.summary}</div>
+                    )}
+                  </div>
+                  <svg
+                    className={`h-4 w-4 shrink-0 text-[var(--sky-muted)] transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
 
-          <AccordionSection
-            id="top"
-            title="Стільниця"
-            openId={openId}
-            setOpenId={setOpenId}
-            summary={topLabel}
-          >
-            <SwatchPicker options={TOP_SETS} value={topId} onChange={setTopId} />
-          </AccordionSection>
+                <div className={`grid transition-all duration-200 ${isOpen ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"}`}>
+                  <div className="overflow-hidden">
+                    <div className="border-t border-[var(--sky-border)] px-4 py-3">
+                      <div className="grid grid-cols-3 gap-2">
+                        {section.options.map((o) => {
+                          const selected = section.value === o.id;
+                          return (
+                            <button
+                              key={o.id}
+                              className={`group flex flex-col items-center gap-2 border p-2.5 transition ${
+                                selected
+                                  ? "border-[var(--sky-accent)] bg-[var(--sky-bg-alt)]"
+                                  : "border-[var(--sky-border)] bg-[var(--sky-card-bg)] hover:border-[var(--sky-muted2)]"
+                              }`}
+                              style={{ borderRadius: 2 }}
+                              onClick={() => section.onChange(o.id)}
+                              title={o.label}
+                              type="button"
+                            >
+                              <span
+                                className="aspect-[4/3] w-full"
+                                style={{
+                                  ...makeChipStyle(o),
+                                  borderRadius: 1,
+                                  boxShadow: "inset 0 0 0 1px rgba(0,0,0,0.06)",
+                                }}
+                              />
+                              <span className={`text-center text-[11px] leading-tight ${selected ? "font-medium text-[var(--sky-fg)]" : "text-[var(--sky-muted)]"}`}>
+                                {o.label}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
 
-          <AccordionSection
-            id="carcass"
-            title="Корпус"
-            openId={openId}
-            setOpenId={setOpenId}
-            summary={carcassLabel}
-          >
-            <SwatchPicker options={CARCASS_SETS} value={carcassId} onChange={setCarcassId} />
-          </AccordionSection>
-
-          {/* Price estimate */}
-          <div
-            className="mt-6 border border-[var(--sky-border)] bg-[var(--sky-bg-alt)] p-4"
-            style={{ borderRadius: 2 }}
-          >
-            <div className="flex items-center justify-between text-xs text-[var(--sky-muted)]">
-              <span>Попередня оцінка</span>
-              <span className="text-[var(--sky-muted2)]">без монтажу</span>
-            </div>
-            <div className="mt-2 text-xl font-medium tracking-tight text-[var(--sky-fg)]">
-              від €5 900
-            </div>
-            <button
-              type="button"
-              className="mt-4 w-full bg-[var(--sky-accent)] py-2.5 text-xs font-medium tracking-[0.04em] text-[var(--sky-accent-fg)] transition hover:opacity-90"
-              style={{ borderRadius: 2 }}
-            >
-              Замовити розрахунок
-            </button>
+          {/* Price & Add to Cart */}
+          <div className="mt-6 border border-[var(--sky-border)] bg-[var(--sky-bg-alt)] p-4" style={{ borderRadius: 2 }}>
+            {product ? (
+              <>
+                <div className="flex items-center justify-between text-xs text-[var(--sky-muted)]">
+                  <span>Ціна</span>
+                  <span className="text-[var(--sky-muted2)]">без монтажу</span>
+                </div>
+                <div className="mt-2 text-xl font-medium tracking-tight text-[var(--sky-fg)]">
+                  ${formatPrice(product.price)}
+                </div>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setIsAddingToCart(true);
+                    // Pass product info for instant optimistic update
+                    await addToCart(product.id, 1, {
+                      name: product.name,
+                      unitPrice: product.price,
+                      product: {
+                        id: product.id,
+                        name: product.name,
+                        image: product.image, // Full URL for instant display
+                        price: product.price,
+                      },
+                    });
+                    setIsAddingToCart(false);
+                  }}
+                  disabled={isAddingToCart || isPending}
+                  className="mt-4 w-full flex items-center justify-center gap-2 bg-[var(--sky-accent)] py-2.5 text-xs font-medium tracking-[0.04em] text-[var(--sky-accent-fg)] transition hover:opacity-90 disabled:opacity-50"
+                  style={{ borderRadius: 2 }}
+                >
+                  {isAddingToCart ? (
+                    <>
+                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                      <span>Додаємо...</span>
+                    </>
+                  ) : (
+                    <>
+                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
+                      </svg>
+                      <span>Додати в кошик</span>
+                    </>
+                  )}
+                </button>
+              </>
+            ) : (
+              <>
+                <div className="flex items-center justify-between text-xs text-[var(--sky-muted)]">
+                  <span>Попередня оцінка</span>
+                  <span className="text-[var(--sky-muted2)]">без монтажу</span>
+                </div>
+                <div className="mt-2 text-xl font-medium tracking-tight text-[var(--sky-fg)]">від $5 900</div>
+                <button
+                  type="button"
+                  className="mt-4 w-full bg-[var(--sky-accent)] py-2.5 text-xs font-medium tracking-[0.04em] text-[var(--sky-accent-fg)] transition hover:opacity-90"
+                  style={{ borderRadius: 2 }}
+                >
+                  Замовити розрахунок
+                </button>
+              </>
+            )}
           </div>
         </div>
       </aside>
 
-      {/* ─────────────────────────────────────────────────────────────────────
-          3D VIEWPORT
-          ───────────────────────────────────────────────────────────────────── */}
+      {/* 3D Viewport */}
       <div
-        className={`relative flex-1 overflow-hidden bg-[var(--sky-bg-alt)] ${
-          isFullscreen ? "" : "min-h-[400px] border border-[var(--sky-border)] lg:min-h-0"
-        }`}
+        className={`relative flex-1 overflow-hidden bg-[var(--sky-bg-alt)] ${isFullscreen ? "" : "min-h-[400px] border border-[var(--sky-border)] lg:min-h-0"}`}
         style={{ borderRadius: isFullscreen ? 0 : 3 }}
       >
+        {/* Loading overlay */}
+        <ModelLoader />
+
         <Canvas
           dpr={[1, 2]}
           gl={{ antialias: true, powerPreference: "high-performance" }}
@@ -171,10 +323,14 @@ export default function KitchenConfigurator({ mode = "embedded" }) {
             <meshStandardMaterial color="#f0f1f3" roughness={0.92} metalness={0} />
           </mesh>
 
-          {/* Model with auto-fit */}
+          {/* All models preloaded, toggle visibility for instant switching */}
           <Bounds fit clip observe margin={1.15}>
             <group position={MODEL_POS} scale={MODEL_SCALE}>
-              <DesignerKitchen url={modelUrl} debug={false} />
+              {Object.entries(MODEL_BY_FACADE).map(([id, url]) => (
+                <group key={id} visible={id === facadeId}>
+                  <DesignerKitchen url={url} debug={false} />
+                </group>
+              ))}
             </group>
           </Bounds>
 
