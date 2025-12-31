@@ -5,6 +5,40 @@ import { requireAppUser } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 
 /**
+ * Format cart data for client consumption
+ */
+function formatCart(cart) {
+  if (!cart) return null;
+  
+  const items = cart.items || [];
+  const subtotal = items.reduce((sum, item) => sum + item.total, 0);
+  
+  return {
+    id: cart.id,
+    subtotal,
+    total: subtotal, // Can add shipping/discounts later
+    currency: cart.currency,
+    itemCount: items.reduce((sum, item) => sum + item.quantity, 0),
+    items: items.map((item) => ({
+      id: item.id,
+      productId: item.productId,
+      name: item.name,
+      unitPrice: item.unitPrice,
+      quantity: item.quantity,
+      total: item.total,
+      product: item.product
+        ? {
+            id: item.product.id,
+            name: item.product.name,
+            imageKey: item.product.imageKey,
+            price: item.product.price,
+          }
+        : null,
+    })),
+  };
+}
+
+/**
  * Get or create DRAFT order (cart) for current user
  */
 async function getOrCreateCart(userId) {
@@ -45,22 +79,23 @@ async function getOrCreateCart(userId) {
 }
 
 /**
- * Recalculate order totals based on items
+ * Fetch fresh cart with all items and return formatted
  */
-async function recalculateOrderTotals(orderId) {
-  const items = await prisma.orderItem.findMany({
-    where: { orderId },
-  });
-
-  const subtotal = items.reduce((sum, item) => sum + item.total, 0);
-
-  await prisma.order.update({
-    where: { id: orderId },
-    data: {
-      subtotal,
-      total: subtotal, // Can add shipping/discounts later
+async function getFreshCart(userId) {
+  const cart = await prisma.order.findFirst({
+    where: {
+      userId,
+      status: "DRAFT",
+    },
+    include: {
+      items: {
+        include: {
+          product: true,
+        },
+      },
     },
   });
+  return formatCart(cart);
 }
 
 /**
@@ -73,29 +108,7 @@ export async function getCart() {
 
     return {
       success: true,
-      cart: {
-        id: cart.id,
-        subtotal: cart.subtotal,
-        total: cart.total,
-        currency: cart.currency,
-        itemCount: cart.items.reduce((sum, item) => sum + item.quantity, 0),
-        items: cart.items.map((item) => ({
-          id: item.id,
-          productId: item.productId,
-          name: item.name,
-          unitPrice: item.unitPrice,
-          quantity: item.quantity,
-          total: item.total,
-          product: item.product
-            ? {
-                id: item.product.id,
-                name: item.product.name,
-                imageKey: item.product.imageKey,
-                price: item.product.price,
-              }
-            : null,
-        })),
-      },
+      cart: formatCart(cart),
     };
   } catch (error) {
     if (error.message === "UNAUTHORIZED") {
@@ -108,6 +121,7 @@ export async function getCart() {
 
 /**
  * Add product to cart (or increase quantity if already exists)
+ * Returns updated cart for optimistic update reconciliation
  */
 export async function addToCart(productId, quantity = 1) {
   try {
@@ -119,19 +133,14 @@ export async function addToCart(productId, quantity = 1) {
     });
 
     if (!product || !product.isActive) {
-      return { success: false, error: "Product not found" };
+      return { success: false, error: "Product not found", cart: null };
     }
 
     // Get or create cart
     const cart = await getOrCreateCart(appUser.id);
 
-    // Check if item already exists in cart
-    const existingItem = await prisma.orderItem.findFirst({
-      where: {
-        orderId: cart.id,
-        productId,
-      },
-    });
+    // Check if item already exists in cart (use cart.items we already have)
+    const existingItem = cart.items.find((item) => item.productId === productId);
 
     if (existingItem) {
       // Update quantity
@@ -161,23 +170,33 @@ export async function addToCart(productId, quantity = 1) {
       });
     }
 
-    // Recalculate order totals
-    await recalculateOrderTotals(cart.id);
+    // Calculate new totals from updated items
+    const updatedCart = await getFreshCart(appUser.id);
+    
+    // Update order totals
+    await prisma.order.update({
+      where: { id: cart.id },
+      data: {
+        subtotal: updatedCart.subtotal,
+        total: updatedCart.total,
+      },
+    });
 
     revalidatePath("/cart");
 
-    return { success: true };
+    return { success: true, cart: updatedCart };
   } catch (error) {
     if (error.message === "UNAUTHORIZED") {
-      return { success: false, error: "UNAUTHORIZED" };
+      return { success: false, error: "UNAUTHORIZED", cart: null };
     }
     console.error("addToCart error:", error);
-    return { success: false, error: "Failed to add to cart" };
+    return { success: false, error: "Failed to add to cart", cart: null };
   }
 }
 
 /**
- * Update item quantity in cart
+ * Update item quantity in cart (fire-and-forget style)
+ * Just updates the DB, no cart return - client handles optimistic updates
  */
 export async function updateCartItem(productId, quantity) {
   try {
@@ -187,21 +206,24 @@ export async function updateCartItem(productId, quantity) {
       return removeFromCart(productId);
     }
 
-    const cart = await getOrCreateCart(appUser.id);
-
+    // Single query: update item and get unitPrice for calculating line total
     const item = await prisma.orderItem.findFirst({
       where: {
-        orderId: cart.id,
         productId,
+        order: {
+          userId: appUser.id,
+          status: "DRAFT",
+        },
       },
     });
 
     if (!item) {
-      return { success: false, error: "Item not found in cart" };
+      return { success: false, error: "Item not found" };
     }
 
     const lineTotal = quantity * item.unitPrice;
 
+    // Update item
     await prisma.orderItem.update({
       where: { id: item.id },
       data: {
@@ -210,9 +232,16 @@ export async function updateCartItem(productId, quantity) {
       },
     });
 
-    await recalculateOrderTotals(cart.id);
-
-    revalidatePath("/cart");
+    // Update order totals (recalculate from all items)
+    const allItems = await prisma.orderItem.findMany({
+      where: { orderId: item.orderId },
+    });
+    const subtotal = allItems.reduce((sum, i) => sum + i.total, 0);
+    
+    await prisma.order.update({
+      where: { id: item.orderId },
+      data: { subtotal, total: subtotal },
+    });
 
     return { success: true };
   } catch (error) {
@@ -220,37 +249,47 @@ export async function updateCartItem(productId, quantity) {
       return { success: false, error: "UNAUTHORIZED" };
     }
     console.error("updateCartItem error:", error);
-    return { success: false, error: "Failed to update cart item" };
+    return { success: false, error: "Failed to update" };
   }
 }
 
 /**
- * Remove item from cart
+ * Remove item from cart (fire-and-forget style)
+ * Just deletes from DB, no cart return - client handles optimistic updates
  */
 export async function removeFromCart(productId) {
   try {
     const { appUser } = await requireAppUser();
 
-    const cart = await getOrCreateCart(appUser.id);
-
+    // Find and delete item in one flow
     const item = await prisma.orderItem.findFirst({
       where: {
-        orderId: cart.id,
         productId,
+        order: {
+          userId: appUser.id,
+          status: "DRAFT",
+        },
       },
     });
 
     if (!item) {
-      return { success: false, error: "Item not found in cart" };
+      return { success: false, error: "Item not found" };
     }
 
     await prisma.orderItem.delete({
       where: { id: item.id },
     });
 
-    await recalculateOrderTotals(cart.id);
-
-    revalidatePath("/cart");
+    // Update order totals
+    const remainingItems = await prisma.orderItem.findMany({
+      where: { orderId: item.orderId },
+    });
+    const subtotal = remainingItems.reduce((sum, i) => sum + i.total, 0);
+    
+    await prisma.order.update({
+      where: { id: item.orderId },
+      data: { subtotal, total: subtotal },
+    });
 
     return { success: true };
   } catch (error) {
@@ -258,12 +297,13 @@ export async function removeFromCart(productId) {
       return { success: false, error: "UNAUTHORIZED" };
     }
     console.error("removeFromCart error:", error);
-    return { success: false, error: "Failed to remove from cart" };
+    return { success: false, error: "Failed to remove" };
   }
 }
 
 /**
  * Clear all items from cart
+ * Returns updated (empty) cart for optimistic update reconciliation
  */
 export async function clearCart() {
   try {
@@ -277,7 +317,17 @@ export async function clearCart() {
     });
 
     if (!cart) {
-      return { success: true };
+      return { 
+        success: true, 
+        cart: {
+          id: null,
+          subtotal: 0,
+          total: 0,
+          currency: "USD",
+          itemCount: 0,
+          items: [],
+        }
+      };
     }
 
     // Delete all items
@@ -296,13 +346,22 @@ export async function clearCart() {
 
     revalidatePath("/cart");
 
-    return { success: true };
+    return { 
+      success: true, 
+      cart: {
+        id: cart.id,
+        subtotal: 0,
+        total: 0,
+        currency: cart.currency,
+        itemCount: 0,
+        items: [],
+      }
+    };
   } catch (error) {
     if (error.message === "UNAUTHORIZED") {
-      return { success: false, error: "UNAUTHORIZED" };
+      return { success: false, error: "UNAUTHORIZED", cart: null };
     }
     console.error("clearCart error:", error);
-    return { success: false, error: "Failed to clear cart" };
+    return { success: false, error: "Failed to clear cart", cart: null };
   }
 }
-

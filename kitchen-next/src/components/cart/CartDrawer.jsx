@@ -23,18 +23,27 @@ export default function CartDrawer() {
     clearCart,
   } = useCart();
 
-  // Close drawer on escape key
+  // Close drawer on escape key + prevent body scroll without layout shift
   useEffect(() => {
     const handleEscape = (e) => {
       if (e.key === "Escape") closeDrawer();
     };
+    
     if (isDrawerOpen) {
       document.addEventListener("keydown", handleEscape);
+      
+      // Calculate scrollbar width to prevent layout shift
+      const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
+      
+      // Lock body scroll and compensate for scrollbar
       document.body.style.overflow = "hidden";
+      document.body.style.paddingRight = `${scrollbarWidth}px`;
     }
+    
     return () => {
       document.removeEventListener("keydown", handleEscape);
       document.body.style.overflow = "";
+      document.body.style.paddingRight = "";
     };
   }, [isDrawerOpen, closeDrawer]);
 
@@ -100,9 +109,9 @@ export default function CartDrawer() {
                     <div key={item.id} className="flex gap-4 p-4">
                       {/* Image */}
                       <div className="relative h-20 w-20 flex-shrink-0 overflow-hidden rounded bg-[var(--sky-bg-alt)]">
-                        {item.product?.imageKey ? (
+                        {(item.product?.image || item.product?.imageKey) ? (
                           <Image
-                            src={getProductImageUrl(item.product.imageKey)}
+                            src={item.product.image || getProductImageUrl(item.product.imageKey)}
                             alt={item.name}
                             fill
                             className="object-cover"
@@ -125,8 +134,7 @@ export default function CartDrawer() {
                           </h3>
                           <button
                             onClick={() => removeItem(item.productId)}
-                            disabled={isPending}
-                            className="text-[var(--sky-muted)] transition-colors hover:text-red-500 disabled:opacity-50"
+                            className="text-[var(--sky-muted)] transition-colors hover:text-red-500"
                           >
                             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                               <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -143,7 +151,7 @@ export default function CartDrawer() {
                           <div className="flex items-center gap-2">
                             <button
                               onClick={() => updateQuantity(item.productId, item.quantity - 1)}
-                              disabled={isPending || item.quantity <= 1}
+                              disabled={item.quantity <= 1}
                               className="flex h-7 w-7 items-center justify-center rounded border border-[var(--sky-border)] text-[var(--sky-fg)] transition-colors hover:bg-[var(--sky-bg-alt)] disabled:opacity-50"
                             >
                               <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -155,8 +163,7 @@ export default function CartDrawer() {
                             </span>
                             <button
                               onClick={() => updateQuantity(item.productId, item.quantity + 1)}
-                              disabled={isPending}
-                              className="flex h-7 w-7 items-center justify-center rounded border border-[var(--sky-border)] text-[var(--sky-fg)] transition-colors hover:bg-[var(--sky-bg-alt)] disabled:opacity-50"
+                              className="flex h-7 w-7 items-center justify-center rounded border border-[var(--sky-border)] text-[var(--sky-fg)] transition-colors hover:bg-[var(--sky-bg-alt)]"
                             >
                               <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />

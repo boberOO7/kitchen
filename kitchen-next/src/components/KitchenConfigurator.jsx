@@ -224,7 +224,17 @@ export default function KitchenConfigurator({ mode = "embedded", product = null 
                   type="button"
                   onClick={async () => {
                     setIsAddingToCart(true);
-                    await addToCart(product.id, 1);
+                    // Pass product info for instant optimistic update
+                    await addToCart(product.id, 1, {
+                      name: product.name,
+                      unitPrice: product.price,
+                      product: {
+                        id: product.id,
+                        name: product.name,
+                        image: product.image, // Full URL for instant display
+                        price: product.price,
+                      },
+                    });
                     setIsAddingToCart(false);
                   }}
                   disabled={isAddingToCart || isPending}
