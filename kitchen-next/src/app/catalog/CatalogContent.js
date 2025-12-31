@@ -45,7 +45,7 @@ export default function CatalogContent({ products }) {
             {products.map((p) => (
               <StaggerItem key={p.slug} variant="fadeUp">
                 <Link
-                  href="/configurator"
+                  href={`/configurator?product=${p.id}`}
                   onClick={() => track("cta_configurator_click", { source: "catalog_product_card", product: p.slug })}
                   className="group flex h-full flex-col overflow-hidden border border-[var(--sky-card-border)] bg-[var(--sky-card-bg)] shadow-[var(--sky-shadow)] transition-shadow duration-300 hover:shadow-lg"
                   style={{ borderRadius: 3 }}

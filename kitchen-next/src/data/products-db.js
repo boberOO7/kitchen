@@ -12,13 +12,8 @@ export async function getProducts() {
     orderBy: { createdAt: "asc" },
   });
 
-  // Debug: log first product to see imageKey value
-  if (products.length > 0) {
-    console.log("[products-db] First product imageKey:", products[0].imageKey);
-    console.log("[products-db] SUPABASE_URL:", process.env.NEXT_PUBLIC_SUPABASE_URL?.slice(0, 30));
-  }
-
   return products.map((p) => ({
+    id: p.id,
     slug: p.sku,
     name: p.name,
     tagline: p.description || "",
@@ -46,6 +41,26 @@ export async function getProductBySku(sku) {
     priceFrom: product.price,
     highlights: [],
     image: getProductImageUrl(product.imageKey),
+  };
+}
+
+/**
+ * Fetch a single product by ID
+ */
+export async function getProductById(id) {
+  const product = await prisma.product.findUnique({
+    where: { id },
+  });
+
+  if (!product || !product.isActive) return null;
+
+  return {
+    id: product.id,
+    slug: product.sku,
+    name: product.name,
+    tagline: product.description || "",
+    price: product.price,
+    image: getProductImageUrl(product.imageKey) || "/placeholder.jpg",
   };
 }
 

@@ -9,6 +9,12 @@ import DesignerKitchen from "@/components/DesignerKitchen";
 import { MODEL_BY_FACADE } from "@/data/constants";
 import { CARCASS_SETS, FACADE_SETS, TOP_SETS } from "@/data/configuratorOptions";
 import { useConfiguratorStore } from "@/stores/useConfiguratorStore";
+import { useCart } from "@/contexts/CartContext";
+
+// Price formatter
+function formatPrice(price) {
+  return new Intl.NumberFormat("uk-UA").format(price);
+}
 
 // 3D Model Loading overlay
 function ModelLoader() {
@@ -86,8 +92,10 @@ function makeChipStyle(opt) {
   return { background: "linear-gradient(135deg, #e8e8e8 0%, #f5f5f5 50%, #e0e0e0 100%)" };
 }
 
-export default function KitchenConfigurator({ mode = "embedded" }) {
+export default function KitchenConfigurator({ mode = "embedded", product = null }) {
   const [openSection, setOpenSection] = useState("facade");
+  const [isAddingToCart, setIsAddingToCart] = useState(false);
+  const { addToCart, isPending } = useCart();
 
   const facadeId = useConfiguratorStore((s) => s.facadeId);
   const topId = useConfiguratorStore((s) => s.topId);
@@ -201,20 +209,59 @@ export default function KitchenConfigurator({ mode = "embedded" }) {
             );
           })}
 
-          {/* Price estimate */}
+          {/* Price & Add to Cart */}
           <div className="mt-6 border border-[var(--sky-border)] bg-[var(--sky-bg-alt)] p-4" style={{ borderRadius: 2 }}>
-            <div className="flex items-center justify-between text-xs text-[var(--sky-muted)]">
-              <span>Попередня оцінка</span>
-              <span className="text-[var(--sky-muted2)]">без монтажу</span>
-            </div>
-            <div className="mt-2 text-xl font-medium tracking-tight text-[var(--sky-fg)]">від €5 900</div>
-            <button
-              type="button"
-              className="mt-4 w-full bg-[var(--sky-accent)] py-2.5 text-xs font-medium tracking-[0.04em] text-[var(--sky-accent-fg)] transition hover:opacity-90"
-              style={{ borderRadius: 2 }}
-            >
-              Замовити розрахунок
-            </button>
+            {product ? (
+              <>
+                <div className="flex items-center justify-between text-xs text-[var(--sky-muted)]">
+                  <span>Ціна</span>
+                  <span className="text-[var(--sky-muted2)]">без монтажу</span>
+                </div>
+                <div className="mt-2 text-xl font-medium tracking-tight text-[var(--sky-fg)]">
+                  ${formatPrice(product.price)}
+                </div>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setIsAddingToCart(true);
+                    await addToCart(product.id, 1);
+                    setIsAddingToCart(false);
+                  }}
+                  disabled={isAddingToCart || isPending}
+                  className="mt-4 w-full flex items-center justify-center gap-2 bg-[var(--sky-accent)] py-2.5 text-xs font-medium tracking-[0.04em] text-[var(--sky-accent-fg)] transition hover:opacity-90 disabled:opacity-50"
+                  style={{ borderRadius: 2 }}
+                >
+                  {isAddingToCart ? (
+                    <>
+                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                      <span>Додаємо...</span>
+                    </>
+                  ) : (
+                    <>
+                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
+                      </svg>
+                      <span>Додати в кошик</span>
+                    </>
+                  )}
+                </button>
+              </>
+            ) : (
+              <>
+                <div className="flex items-center justify-between text-xs text-[var(--sky-muted)]">
+                  <span>Попередня оцінка</span>
+                  <span className="text-[var(--sky-muted2)]">без монтажу</span>
+                </div>
+                <div className="mt-2 text-xl font-medium tracking-tight text-[var(--sky-fg)]">від $5 900</div>
+                <button
+                  type="button"
+                  className="mt-4 w-full bg-[var(--sky-accent)] py-2.5 text-xs font-medium tracking-[0.04em] text-[var(--sky-accent-fg)] transition hover:opacity-90"
+                  style={{ borderRadius: 2 }}
+                >
+                  Замовити розрахунок
+                </button>
+              </>
+            )}
           </div>
         </div>
       </aside>

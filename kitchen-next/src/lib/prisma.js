@@ -7,7 +7,6 @@ const globalForPrisma = globalThis;
 
 function makeClient() {
   const connectionString = process.env.DATABASE_URL;
-  console.log("[Prisma] DATABASE_URL starts with:", connectionString?.slice(0, 30) + "...");
   if (!connectionString) {
     throw new Error("Missing DATABASE_URL. Add it to kitchen-next/.env (copy from env.sample).");
   }

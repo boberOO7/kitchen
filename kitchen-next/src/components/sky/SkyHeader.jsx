@@ -5,6 +5,7 @@ import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import ThemeToggle from "@/components/sky/ThemeToggle";
 import ScrollProgress from "@/components/sky/ScrollProgress";
+import CartIcon from "@/components/cart/CartIcon";
 import { track } from "@/lib/analytics";
 
 const nav = [
@@ -51,6 +52,9 @@ export default function SkyHeader() {
         {/* Actions */}
         <div className="flex items-center gap-3">
           <ThemeToggle />
+
+          {/* Cart */}
+          <CartIcon />
 
           {/* Login link */}
           <Link
@@ -125,6 +129,13 @@ export default function SkyHeader() {
                 transition={{ delay: nav.length * 0.05 }}
                 className="mt-3 pt-3 border-t border-[var(--sky-header-border)]"
               >
+                <Link
+                  href="/cart"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="block py-2.5 text-sm text-[var(--sky-header-fg)] transition hover:text-[var(--sky-accent)]"
+                >
+                  Кошик
+                </Link>
                 <Link
                   href="/login"
                   onClick={() => setMobileMenuOpen(false)}
