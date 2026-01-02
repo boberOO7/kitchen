@@ -704,10 +704,24 @@ export default function CheckoutPage() {
                   </div>
                 )}
 
-                {/* Security Note */}
-                <p className="mt-4 text-xs text-[var(--sky-muted)] text-center">
-                  Оплата здійснюється через захищену платіжну систему Monobank
-                </p>
+                {/* Consent Notice */}
+                <div className="mt-4 text-xs text-[var(--sky-muted)]">
+                  <p>Підтверджуючи замовлення, ви приймаєте:</p>
+                  <ul className="mt-1.5 space-y-1">
+                    <li className="flex items-center gap-1.5">
+                      <span className="text-[var(--sky-muted2)]">•</span>
+                      <Link href="/privacy" className="underline underline-offset-2 hover:text-[var(--sky-fg)] transition">
+                        Політику конфіденційності
+                      </Link>
+                    </li>
+                    <li className="flex items-center gap-1.5">
+                      <span className="text-[var(--sky-muted2)]">•</span>
+                      <Link href="/terms" className="underline underline-offset-2 hover:text-[var(--sky-fg)] transition">
+                        Умови використання
+                      </Link>
+                    </li>
+                  </ul>
+                </div>
               </div>
             </div>
           </div>

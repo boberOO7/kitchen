@@ -70,10 +70,10 @@ export default function SkyFooter() {
         <div className="mt-12 flex flex-col items-center justify-between gap-4 border-t border-[var(--sky-border)] pt-6 text-xs text-[var(--sky-muted2)] sm:flex-row">
           <div>© {new Date().getFullYear()} SKY Kitchens. Всі права захищено.</div>
           <div className="flex gap-5">
-            <Link href="#" className="transition hover:text-[var(--sky-fg)]">
+            <Link href="/privacy" className="transition hover:text-[var(--sky-fg)]">
               Політика конфіденційності
             </Link>
-            <Link href="#" className="transition hover:text-[var(--sky-fg)]">
+            <Link href="/terms" className="transition hover:text-[var(--sky-fg)]">
               Умови використання
             </Link>
           </div>
