@@ -30,7 +30,7 @@ export async function initiateMonobankPayment() {
       return { success: false, error: "Кошик порожній" };
     }
 
-    if (order.total <= 0) {
+    if (order.totalMinor <= 0) {
       return { success: false, error: "Сума замовлення має бути більше 0" };
     }
 
@@ -91,17 +91,17 @@ export async function getOrderDetails(orderId) {
       order: {
         id: order.id,
         status: order.status,
-        subtotal: order.subtotal,
-        total: order.total,
+        subtotal: order.subtotalMinor, // In minor units (cents/kopeks)
+        total: order.totalMinor, // In minor units (cents/kopeks)
         currency: order.currency,
         createdAt: order.createdAt.toISOString(),
         updatedAt: order.updatedAt.toISOString(),
         items: order.items.map((item) => ({
           id: item.id,
           name: item.name,
-          unitPrice: item.unitPrice,
+          unitPrice: item.unitPriceMinor, // In minor units (cents/kopeks)
           quantity: item.quantity,
-          total: item.total,
+          total: item.totalMinor, // In minor units (cents/kopeks)
           product: item.product
             ? {
                 id: item.product.id,
@@ -116,7 +116,7 @@ export async function getOrderDetails(orderId) {
             id: latestPayment.id,
             status: latestPayment.status,
             provider: latestPayment.provider,
-            amount: latestPayment.amount,
+            amount: latestPayment.amountMinor, // In minor units (cents/kopeks)
             createdAt: latestPayment.createdAt.toISOString(),
           }
         : null,

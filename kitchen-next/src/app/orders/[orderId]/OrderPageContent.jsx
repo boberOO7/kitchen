@@ -9,8 +9,10 @@ import { getProductImageUrl } from "@/lib/storage";
 import SuccessAnimation from "@/components/animations/SuccessAnimation";
 import AnimateOnScroll from "@/components/animations/AnimateOnScroll";
 
-function formatPrice(price) {
-  return new Intl.NumberFormat("uk-UA").format(price);
+import { formatPriceFromMinor } from "@/lib/currency";
+
+function formatPrice(minorUnits) {
+  return formatPriceFromMinor(minorUnits);
 }
 
 function formatDate(dateString) {

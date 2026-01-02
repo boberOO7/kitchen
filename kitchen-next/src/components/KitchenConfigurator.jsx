@@ -11,9 +11,11 @@ import { CARCASS_SETS, FACADE_SETS, TOP_SETS } from "@/data/configuratorOptions"
 import { useConfiguratorStore } from "@/stores/useConfiguratorStore";
 import { useCart } from "@/contexts/CartContext";
 
-// Price formatter
-function formatPrice(price) {
-  return new Intl.NumberFormat("uk-UA").format(price);
+import { formatPriceFromMinor } from "@/lib/currency";
+
+// Price formatter (converts from minor units for display)
+function formatPrice(minorUnits) {
+  return formatPriceFromMinor(minorUnits);
 }
 
 // 3D Model Loading overlay

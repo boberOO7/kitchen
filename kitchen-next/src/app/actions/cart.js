@@ -6,32 +6,33 @@ import { revalidatePath } from "next/cache";
 
 /**
  * Format cart data for client consumption
+ * Note: All prices are stored in minor units (cents/kopeks)
  */
 function formatCart(cart) {
   if (!cart) return null;
   
   const items = cart.items || [];
-  const subtotal = items.reduce((sum, item) => sum + item.total, 0);
+  const subtotal = items.reduce((sum, item) => sum + item.totalMinor, 0);
   
   return {
     id: cart.id,
-    subtotal,
-    total: subtotal, // Can add shipping/discounts later
+    subtotal, // In minor units
+    total: subtotal, // In minor units. Can add shipping/discounts later
     currency: cart.currency,
     itemCount: items.reduce((sum, item) => sum + item.quantity, 0),
     items: items.map((item) => ({
       id: item.id,
       productId: item.productId,
       name: item.name,
-      unitPrice: item.unitPrice,
+      unitPrice: item.unitPriceMinor, // In minor units
       quantity: item.quantity,
-      total: item.total,
+      total: item.totalMinor, // In minor units
       product: item.product
         ? {
             id: item.product.id,
             name: item.product.name,
             imageKey: item.product.imageKey,
-            price: item.product.price,
+            price: item.product.priceMinor, // In minor units
           }
         : null,
     })),
@@ -62,8 +63,8 @@ async function getOrCreateCart(userId) {
         userId,
         status: "DRAFT",
         currency: "USD",
-        subtotal: 0,
-        total: 0,
+        subtotalMinor: 0,
+        totalMinor: 0,
       },
       include: {
         items: {
@@ -145,27 +146,27 @@ export async function addToCart(productId, quantity = 1) {
     if (existingItem) {
       // Update quantity
       const newQuantity = existingItem.quantity + quantity;
-      const lineTotal = newQuantity * existingItem.unitPrice;
+      const lineTotal = newQuantity * existingItem.unitPriceMinor;
 
       await prisma.orderItem.update({
         where: { id: existingItem.id },
         data: {
           quantity: newQuantity,
-          total: lineTotal,
+          totalMinor: lineTotal,
         },
       });
     } else {
-      // Create new item
-      const lineTotal = quantity * product.price;
+      // Create new item (prices in minor units)
+      const lineTotal = quantity * product.priceMinor;
 
       await prisma.orderItem.create({
         data: {
           orderId: cart.id,
           productId,
           name: product.name,
-          unitPrice: product.price,
+          unitPriceMinor: product.priceMinor,
           quantity,
-          total: lineTotal,
+          totalMinor: lineTotal,
         },
       });
     }
@@ -173,12 +174,12 @@ export async function addToCart(productId, quantity = 1) {
     // Calculate new totals from updated items
     const updatedCart = await getFreshCart(appUser.id);
     
-    // Update order totals
+    // Update order totals (in minor units)
     await prisma.order.update({
       where: { id: cart.id },
       data: {
-        subtotal: updatedCart.subtotal,
-        total: updatedCart.total,
+        subtotalMinor: updatedCart.subtotal,
+        totalMinor: updatedCart.total,
       },
     });
 
@@ -221,26 +222,26 @@ export async function updateCartItem(productId, quantity) {
       return { success: false, error: "Item not found" };
     }
 
-    const lineTotal = quantity * item.unitPrice;
+    const lineTotal = quantity * item.unitPriceMinor;
 
     // Update item
     await prisma.orderItem.update({
       where: { id: item.id },
       data: {
         quantity,
-        total: lineTotal,
+        totalMinor: lineTotal,
       },
     });
 
-    // Update order totals (recalculate from all items)
+    // Update order totals (recalculate from all items, in minor units)
     const allItems = await prisma.orderItem.findMany({
       where: { orderId: item.orderId },
     });
-    const subtotal = allItems.reduce((sum, i) => sum + i.total, 0);
+    const subtotal = allItems.reduce((sum, i) => sum + i.totalMinor, 0);
     
     await prisma.order.update({
       where: { id: item.orderId },
-      data: { subtotal, total: subtotal },
+      data: { subtotalMinor: subtotal, totalMinor: subtotal },
     });
 
     return { success: true };
@@ -280,15 +281,15 @@ export async function removeFromCart(productId) {
       where: { id: item.id },
     });
 
-    // Update order totals
+    // Update order totals (in minor units)
     const remainingItems = await prisma.orderItem.findMany({
       where: { orderId: item.orderId },
     });
-    const subtotal = remainingItems.reduce((sum, i) => sum + i.total, 0);
+    const subtotal = remainingItems.reduce((sum, i) => sum + i.totalMinor, 0);
     
     await prisma.order.update({
       where: { id: item.orderId },
-      data: { subtotal, total: subtotal },
+      data: { subtotalMinor: subtotal, totalMinor: subtotal },
     });
 
     return { success: true };
@@ -339,8 +340,8 @@ export async function clearCart() {
     await prisma.order.update({
       where: { id: cart.id },
       data: {
-        subtotal: 0,
-        total: 0,
+        subtotalMinor: 0,
+        totalMinor: 0,
       },
     });
 

@@ -7,8 +7,10 @@ import Image from "next/image";
 import { useCart } from "@/contexts/CartContext";
 import { getProductImageUrl } from "@/lib/storage";
 
-function formatPrice(price) {
-  return new Intl.NumberFormat("uk-UA").format(price);
+import { formatPriceFromMinor } from "@/lib/currency";
+
+function formatPrice(minorUnits) {
+  return formatPriceFromMinor(minorUnits);
 }
 
 export default function CartDrawer() {
@@ -197,7 +199,7 @@ export default function CartDrawer() {
                 {/* Actions */}
                 <div className="flex flex-col gap-3">
                   <Link
-                    href="/cart"
+                    href="/checkout"
                     onClick={closeDrawer}
                     className="flex items-center justify-center rounded bg-[var(--sky-accent)] px-4 py-3 text-sm font-medium text-[var(--sky-accent-fg)] transition-opacity hover:opacity-90"
                   >

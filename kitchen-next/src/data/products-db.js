@@ -17,7 +17,7 @@ export async function getProducts() {
     slug: p.sku,
     name: p.name,
     tagline: p.description || "",
-    priceFrom: p.price,
+    priceFrom: p.priceMinor, // In minor units (cents/kopeks)
     // highlights not stored in DB, using empty array
     highlights: [],
     image: getProductImageUrl(p.imageKey) || "/placeholder.jpg",
@@ -38,7 +38,7 @@ export async function getProductBySku(sku) {
     slug: product.sku,
     name: product.name,
     tagline: product.description || "",
-    priceFrom: product.price,
+    priceFrom: product.priceMinor, // In minor units (cents/kopeks)
     highlights: [],
     image: getProductImageUrl(product.imageKey),
   };
@@ -59,7 +59,7 @@ export async function getProductById(id) {
     slug: product.sku,
     name: product.name,
     tagline: product.description || "",
-    price: product.price,
+    price: product.priceMinor, // In minor units (cents/kopeks)
     image: getProductImageUrl(product.imageKey) || "/placeholder.jpg",
   };
 }

@@ -5,9 +5,11 @@ import Image from "next/image";
 import AnimateOnScroll, { StaggerContainer, StaggerItem } from "@/components/animations/AnimateOnScroll";
 import { track } from "@/lib/analytics";
 
-// Fixed price formatter to avoid hydration mismatch (server vs client locale)
-function formatPrice(price) {
-  return new Intl.NumberFormat("uk-UA").format(price);
+import { formatPriceFromMinor } from "@/lib/currency";
+
+// Price formatter (converts from minor units for display)
+function formatPrice(minorUnits) {
+  return formatPriceFromMinor(minorUnits);
 }
 
 export default function CatalogContent({ products }) {

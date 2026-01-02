@@ -6,6 +6,7 @@ import {
   getCurrencyCode,
   type MonoInvoiceCreateRequest,
 } from "@/lib/monobank";
+import { getProductImageUrl } from "@/lib/storage";
 import { PaymentProvider, PaymentStatus, OrderStatus } from "@prisma/client";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -108,7 +109,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (order.total <= 0) {
+    if (order.totalMinor <= 0) {
       return NextResponse.json(
         { error: "Order total must be greater than 0" },
         { status: 400 }
@@ -135,11 +136,11 @@ export async function POST(request: NextRequest) {
       console.log("   Set APP_URL in .env to your ngrok URL");
     }
     
-    // Convert order total to UAH kopeks
-    const amountInKopeks = order.total;
+    // Order total is already stored in minor units (cents/kopeks)
+    const amountMinor = order.totalMinor;
 
     const invoicePayload: MonoInvoiceCreateRequest = {
-      amount: 1, // Test: 1 kopiyka
+      amount: amountMinor, // Already in minor units (cents/kopeks)
       ccy: getCurrencyCode(order.currency),
       merchantPaymInfo: {
         reference: order.id,
@@ -147,8 +148,11 @@ export async function POST(request: NextRequest) {
         basketOrder: order.items.map((item) => ({
           name: item.name,
           qty: item.quantity,
-          sum: item.total,
+          sum: item.totalMinor, // Already in minor units
           unit: "шт.",
+          icon: item.product?.imageKey 
+            ? getProductImageUrl(item.product.imageKey) 
+            : undefined,
         })),
       },
       redirectUrl: `${origin}/orders/${order.id}?success=1`,
@@ -173,7 +177,7 @@ export async function POST(request: NextRequest) {
         orderId: order.id,
         provider: PaymentProvider.MONOBANK,
         status: PaymentStatus.CREATED,
-        amount: amountInKopeks,
+        amountMinor: amountMinor,
         currency: order.currency,
         providerRef: monoResponse.invoiceId,
         raw: monoResponse as object,

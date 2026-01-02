@@ -48,26 +48,26 @@ model Product {
   sku         String?     @unique
   name        String
   description String?
-  price       Int
+  priceMinor  Int         // Price in minor units (cents/kopeks)
   currency    String      @default("USD")
   isActive    Boolean     @default(true)
-  imageKey    String?  // "products/xxx.png" (Supabase Storage)
+  imageKey    String?     // "products/xxx.png" (Supabase Storage)
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
   items       OrderItem[]
 }
 
 model OrderItem {
-  id         String   @id @default(uuid())
-  orderId    String
-  productId  String?
-  name       String
-  unitPrice  Int
-  quantity   Int      @default(1)
-  total      Int
-  configId   String?
-  order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  product    Product? @relation(fields: [productId], references: [id])
+  id             String   @id @default(uuid())
+  orderId        String
+  productId      String?
+  name           String
+  unitPriceMinor Int      // Unit price in minor units (cents/kopeks)
+  quantity       Int      @default(1)
+  totalMinor     Int      // Line total in minor units (cents/kopeks)
+  configId       String?
+  order          Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product        Product? @relation(fields: [productId], references: [id])
 
   @@index([orderId])
   @@index([productId])
@@ -79,8 +79,8 @@ model Order {
   projectId       String?
   status          OrderStatus @default(DRAFT)
   currency        String      @default("USD")
-  subtotal        Int         @default(0)
-  total           Int         @default(0)
+  subtotalMinor   Int         @default(0) // Subtotal in minor units (cents/kopeks)
+  totalMinor      Int         @default(0) // Total in minor units (cents/kopeks)
   activePaymentId String?     @unique
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
@@ -99,7 +99,7 @@ model Payment {
   orderId        String
   provider       PaymentProvider @default(MONOBANK)
   status         PaymentStatus   @default(CREATED)
-  amount         Int
+  amountMinor    Int             // Amount in minor units (cents/kopeks)
   currency       String          @default("USD")
   providerRef    String?         @unique
   webhookEventId String?         @unique

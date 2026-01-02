@@ -9,12 +9,14 @@ const pool = new Pool({
 const adapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter });
 
+// Prices are stored in minor units (cents for USD, kopeks for UAH)
+// Example: 590000 cents = $5,900
 const SKY_PRODUCTS = [
   {
     sku: "sky-linea",
     name: "SKY Linea",
     description: "Чисті лінії, матові фасади, тиха фурнітура.",
-    price: 5900,
+    priceMinor: 590000, // $5,900
     currency: "USD",
     isActive: true,
     imageKey: "kitchens/sky-linea.jpg",
@@ -23,7 +25,7 @@ const SKY_PRODUCTS = [
     sku: "sky-nero",
     name: "SKY Nero",
     description: "Глибокий графіт з акцентами металу.",
-    price: 7200,
+    priceMinor: 720000, // $7,200
     currency: "USD",
     isActive: true,
     imageKey: "kitchens/sky-nero.jpg",
@@ -32,7 +34,7 @@ const SKY_PRODUCTS = [
     sku: "sky-oak",
     name: "SKY Oak",
     description: "Теплий шпон, мінімум деталей, максимум тактильності.",
-    price: 6400,
+    priceMinor: 640000, // $6,400
     currency: "USD",
     isActive: true,
     imageKey: "kitchens/sky-oak.jpg",
@@ -41,7 +43,7 @@ const SKY_PRODUCTS = [
     sku: "sky-ice",
     name: "SKY Ice",
     description: "Світла кухня з каменем та акуратною геометрією.",
-    price: 6100,
+    priceMinor: 610000, // $6,100
     currency: "USD",
     isActive: true,
     imageKey: "kitchens/sky-ice.jpg",
@@ -50,7 +52,7 @@ const SKY_PRODUCTS = [
     sku: "sky-studio",
     name: "SKY Studio",
     description: "Компактні модулі для студій та апартаментів.",
-    price: 4200,
+    priceMinor: 420000, // $4,200
     currency: "USD",
     isActive: true,
     imageKey: "kitchens/sky-studio.jpg",
@@ -59,7 +61,7 @@ const SKY_PRODUCTS = [
     sku: "sky-signature",
     name: "SKY Signature",
     description: "Преміум-композиція з індивідуальними матеріалами.",
-    price: 9800,
+    priceMinor: 980000, // $9,800
     currency: "USD",
     isActive: true,
     imageKey: "kitchens/sky-signature.jpg",
