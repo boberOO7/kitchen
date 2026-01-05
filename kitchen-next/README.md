@@ -1,5 +1,46 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
 
+## Environment Variables
+
+Copy `.env.example` to `.env.local` and fill in the values:
+
+```bash
+cp .env.example .env.local
+```
+
+### Monobank "Покупка частинами" (Installments) Configuration
+
+For testing, use the test platform credentials:
+
+| Variable | Value | Description |
+|----------|-------|-------------|
+| `MONO_CHAST_BASE_URL` | `https://u2-demo-ext.mono.st4g3.com` | API base URL |
+| `MONO_CHAST_STORE_ID` | `test_store_with_confirm` | Store identifier |
+| `MONO_CHAST_SECRET` | `secret_98765432--123-123` | HMAC secret for signatures |
+| `MONO_CHAST_CALLBACK_URL` | `https://YOUR_DOMAIN/api/webhooks/mono-installments` | Webhook URL |
+| `MONO_CHAST_MOCK` | `true` (optional) | Enable mock mode for local dev |
+
+**API Endpoints:**
+- Create: `POST /api/order/create`
+- Confirm: `POST /api/order/confirm`
+- Status: `POST /api/order/status`
+
+**Request Headers:**
+- `store-id` - Store identifier
+- `signature` - HMAC-SHA256 Base64 signature of request body
+- `Content-Type: application/json`
+- `Accept: application/json`
+
+**Phone Format:** Must be `+380XXXXXXXXX` with valid Ukrainian operator code (e.g., `+380671234561`).
+
+**Test scenarios** (based on customer phone last digit):
+- **1** → Approved callback after ~5 seconds
+- **2** → Waiting for customer confirmation (PENDING_CUSTOMER)
+- **3** → Declined (insufficient limit) callback after ~5 seconds  
+- **4** → Customer confirmed, waiting for merchant confirmation (2-step flow)
+
+For production, obtain credentials from the Monobank merchant portal.
+
 ## Getting Started
 
 First, run the development server:

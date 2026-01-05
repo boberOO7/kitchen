@@ -1,17 +1,36 @@
 "use client";
 
-import { useState, useEffect, useRef, useLayoutEffect } from "react";
+import { useState, useEffect, useRef, useLayoutEffect, useCallback } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useCart } from "@/contexts/CartContext";
 import { useAuth } from "@/hooks/useAuth";
 import { getProductImageUrl } from "@/lib/storage";
-import { initiateMonobankPayment } from "@/app/actions/checkout";
+import { initiateMonobankPayment, getPendingPaymentOrder, getInstallmentOptions } from "@/app/actions/checkout";
 import { formatPriceFromMinor } from "@/lib/currency";
 
 function formatPrice(minorUnits: number) {
   return formatPriceFromMinor(minorUnits);
+}
+
+// Payment method type
+type PaymentMethodType = "card" | "installments";
+
+// Installment period options
+const INSTALLMENT_PERIODS = [3, 6, 9, 12] as const;
+type InstallmentPeriod = typeof INSTALLMENT_PERIODS[number];
+
+// Test scenario descriptions for dev
+function getTestScenarioInfo(phone: string): string {
+  const lastDigit = phone.replace(/\D/g, "").slice(-1);
+  switch (lastDigit) {
+    case "1": return "✅ Сценарій 1: Буде схвалено через ~5 сек";
+    case "2": return "⏳ Сценарій 2: Очікування підтвердження клієнта";
+    case "3": return "❌ Сценарій 3: Буде відхилено через ~5 сек";
+    case "4": return "🏪 Сценарій 4: Потребує підтвердження магазину";
+    default: return "";
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -38,6 +57,39 @@ function LockIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z" />
+    </svg>
+  );
+}
+
+function CreditCardIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 0 0 2.25-2.25V6.75A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25v10.5A2.25 2.25 0 0 0 4.5 19.5Z" />
+    </svg>
+  );
+}
+
+function CalendarIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" />
+    </svg>
+  );
+}
+
+function InfoIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="m11.25 11.25.041-.02a.75.75 0 0 1 1.063.852l-.708 2.836a.75.75 0 0 0 1.063.853l.041-.021M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-3.75h.008v.008H12V8.25Z" />
+    </svg>
+  );
+}
+
+function SpinnerIcon({ className }: { className?: string }) {
+  return (
+    <svg className={`animate-spin ${className || ""}`} viewBox="0 0 24 24" fill="none">
+      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
     </svg>
   );
 }
@@ -286,7 +338,9 @@ interface CheckoutFormData {
 export default function CheckoutPage() {
   const router = useRouter();
   const { user, isLoading: authLoading } = useAuth();
-  const { cart, isLoading: cartLoading } = useCart();
+  const { cart, isLoading: cartLoading, clearCart } = useCart();
+
+  const CHECKOUT_FORM_STORAGE_KEY = "sky_checkout_form_data";
 
   const [formData, setFormData] = useState<CheckoutFormData>({
     firstName: "",
@@ -302,19 +356,196 @@ export default function CheckoutPage() {
   const [errors, setErrors] = useState<Partial<CheckoutFormData>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [isFormLoaded, setIsFormLoaded] = useState(false);
+  const [pendingOrder, setPendingOrder] = useState<{
+    id: string;
+    total: number;
+    itemCount: number;
+    paymentStatus: string | null;
+  } | null>(null);
+  const [checkingPendingOrder, setCheckingPendingOrder] = useState(false);
 
-  // Pre-fill form with user data from Google OAuth
+  // Payment method state
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethodType>("card");
+  const [installmentMonths, setInstallmentMonths] = useState<InstallmentPeriod>(6);
+  const [installmentOptions, setInstallmentOptions] = useState<Array<{
+    months: number;
+    monthlyAmount: number;
+    totalAmount: number;
+  }>>([]);
+  
+  // Installment flow state
+  const [installmentStatus, setInstallmentStatus] = useState<string | null>(null);
+  const [installmentError, setInstallmentError] = useState<string | null>(null);
+  const [isPollingStatus, setIsPollingStatus] = useState(false);
+  const [pendingInstallmentOrderId, setPendingInstallmentOrderId] = useState<string | null>(null);
+  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Load saved form data from localStorage on mount
   useEffect(() => {
-    if (user) {
+    try {
+      const savedData = localStorage.getItem(CHECKOUT_FORM_STORAGE_KEY);
+      if (savedData) {
+        const parsed = JSON.parse(savedData) as Partial<CheckoutFormData>;
+        setFormData((prev) => ({
+          ...prev,
+          ...parsed,
+        }));
+      }
+    } catch (e) {
+      // Ignore localStorage errors
+      console.error("Failed to load checkout form data:", e);
+    }
+    setIsFormLoaded(true);
+  }, []);
+
+  // Save form data to localStorage when it changes (after initial load)
+  useEffect(() => {
+    if (!isFormLoaded) return;
+    
+    try {
+      localStorage.setItem(CHECKOUT_FORM_STORAGE_KEY, JSON.stringify(formData));
+    } catch (e) {
+      // Ignore localStorage errors
+      console.error("Failed to save checkout form data:", e);
+    }
+  }, [formData, isFormLoaded]);
+
+  // Pre-fill form with user data from Google OAuth (only if fields are empty)
+  useEffect(() => {
+    if (user && isFormLoaded) {
       setFormData((prev) => ({
         ...prev,
         // Use firstName/lastName from Google, or fallback to splitting full name
-        firstName: user.firstName || user.name?.split(" ")[0] || prev.firstName,
-        lastName: user.lastName || user.name?.split(" ").slice(1).join(" ") || prev.lastName,
-        email: user.email || prev.email,
+        // Only fill if the field is currently empty
+        firstName: prev.firstName || user.firstName || user.name?.split(" ")[0] || "",
+        lastName: prev.lastName || user.lastName || user.name?.split(" ").slice(1).join(" ") || "",
+        email: prev.email || user.email || "",
       }));
     }
-  }, [user]);
+  }, [user, isFormLoaded]);
+
+  // Check for pending orders when cart is empty
+  useEffect(() => {
+    async function checkPendingOrder() {
+      if (!user || cartLoading) return;
+      if (cart && cart.items.length > 0) return; // Cart has items, no need to check
+
+      setCheckingPendingOrder(true);
+      try {
+        const result = await getPendingPaymentOrder();
+        if (result.success && result.order) {
+          setPendingOrder(result.order);
+        }
+      } catch (e) {
+        console.error("Failed to check pending orders:", e);
+      } finally {
+        setCheckingPendingOrder(false);
+      }
+    }
+
+    checkPendingOrder();
+  }, [user, cart, cartLoading]);
+
+  // Fetch installment options when cart is loaded
+  useEffect(() => {
+    async function fetchInstallmentOptions() {
+      if (!cart || cart.items.length === 0) return;
+      
+      try {
+        const result = await getInstallmentOptions();
+        if (result.success && result.options) {
+          setInstallmentOptions(result.options);
+        }
+      } catch (e) {
+        console.error("Failed to fetch installment options:", e);
+      }
+    }
+
+    fetchInstallmentOptions();
+  }, [cart]);
+
+  // Cleanup polling on unmount
+  useEffect(() => {
+    return () => {
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+      }
+    };
+  }, []);
+
+  // Poll for installment status updates
+  const pollInstallmentStatus = useCallback(async (orderId: string) => {
+    setIsPollingStatus(true);
+    setPendingInstallmentOrderId(orderId);
+    
+    const pollFn = async () => {
+      try {
+        const response = await fetch(`/api/payments/mono-installments/status?orderId=${orderId}`);
+        if (!response.ok) return;
+        
+        const data = await response.json();
+        setInstallmentStatus(data.status);
+        
+        // Handle terminal statuses
+        if (data.status === "APPROVED") {
+          if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+          setIsPollingStatus(false);
+          // Clear cart after successful payment
+          await clearCart();
+          router.push(`/orders/${orderId}?success=true`);
+        } else if (data.status === "DECLINED") {
+          if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+          setIsPollingStatus(false);
+          setInstallmentError("Заявку на розстрочку відхилено. Спробуйте інший спосіб оплати.");
+        } else if (data.status === "PENDING_MERCHANT") {
+          // User needs to click merchant confirm
+          if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+          setIsPollingStatus(false);
+        }
+      } catch (e) {
+        console.error("Failed to poll installment status:", e);
+      }
+    };
+
+    // Initial poll
+    await pollFn();
+    
+    // Start polling every 3 seconds
+    pollIntervalRef.current = setInterval(pollFn, 3000);
+  }, [router]);
+
+  // Handle merchant confirm for scenario 4 (phone ends with 4)
+  const handleMerchantConfirm = async () => {
+    if (!pendingInstallmentOrderId) return;
+    
+    setIsSubmitting(true);
+    setInstallmentError(null);
+    
+    try {
+      const response = await fetch("/api/payments/mono-installments/merchant-confirm", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderId: pendingInstallmentOrderId }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setInstallmentError(data.error || "Не вдалося підтвердити розстрочку");
+        setIsSubmitting(false);
+        return;
+      }
+
+      // Success - redirect to order page
+      router.push(`/orders/${pendingInstallmentOrderId}?success=true`);
+    } catch (error) {
+      console.error("Merchant confirm error:", error);
+      setInstallmentError("Сталася помилка. Спробуйте ще раз.");
+      setIsSubmitting(false);
+    }
+  };
+
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -354,11 +585,21 @@ export default function CheckoutPage() {
 
     setIsSubmitting(true);
     setSubmitError(null);
+    setInstallmentError(null);
+    setInstallmentStatus(null);
 
     try {
-      // TODO: Save delivery info to order before payment
-      // For now, go directly to payment
-      const result = await initiateMonobankPayment();
+      // Save delivery info and initiate payment
+      const result = await initiateMonobankPayment({
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        email: formData.email,
+        phone: formData.phone,
+        city: formData.city,
+        address: formData.address,
+        deliveryMethod: formData.deliveryMethod,
+        comment: formData.comment,
+      });
 
       if (!result.success) {
         if (result.error === "UNAUTHORIZED") {
@@ -370,27 +611,55 @@ export default function CheckoutPage() {
         return;
       }
 
-      // Call API to create Monobank invoice
-      const response = await fetch("/api/payments/monobank/create", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ orderId: result.orderId }),
-      });
+      // Branch based on payment method
+      if (paymentMethod === "installments") {
+        // Create installment application
+        const response = await fetch("/api/payments/mono-installments/create", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            orderId: result.orderId,
+            customerPhone: formData.phone,
+            months: installmentMonths,
+          }),
+        });
 
-      const data = await response.json();
+        const data = await response.json();
 
-      if (!response.ok) {
-        setSubmitError(data.error || "Не вдалося створити платіж");
+        if (!response.ok) {
+          setInstallmentError(data.error || "Не вдалося створити заявку на розстрочку");
+          setIsSubmitting(false);
+          return;
+        }
+
+        // Start polling for status updates
+        setInstallmentStatus(data.status);
         setIsSubmitting(false);
-        return;
-      }
+        pollInstallmentStatus(result.orderId!);
 
-      // Redirect to Monobank payment page
-      if (data.pageUrl) {
-        window.location.href = data.pageUrl;
       } else {
-        setSubmitError("Не отримано посилання на оплату");
-        setIsSubmitting(false);
+        // Standard card payment flow
+        const response = await fetch("/api/payments/monobank/create", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ orderId: result.orderId }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          setSubmitError(data.error || "Не вдалося створити платіж");
+          setIsSubmitting(false);
+          return;
+        }
+
+        // Redirect to Monobank payment page
+        if (data.pageUrl) {
+          window.location.href = data.pageUrl;
+        } else {
+          setSubmitError("Не отримано посилання на оплату");
+          setIsSubmitting(false);
+        }
       }
     } catch (error) {
       console.error("Checkout error:", error);
@@ -398,6 +667,24 @@ export default function CheckoutPage() {
       setIsSubmitting(false);
     }
   };
+
+  // Reset installment state when switching payment methods
+  const handlePaymentMethodChange = (method: PaymentMethodType) => {
+    setPaymentMethod(method);
+    setInstallmentStatus(null);
+    setInstallmentError(null);
+    if (pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current);
+      pollIntervalRef.current = null;
+    }
+    setIsPollingStatus(false);
+    setPendingInstallmentOrderId(null);
+  };
+
+  // Get selected installment option
+  const selectedInstallmentOption = installmentOptions.find(
+    (opt) => opt.months === installmentMonths
+  );
 
   // Loading state
   if (authLoading || cartLoading) {
@@ -427,8 +714,34 @@ export default function CheckoutPage() {
     );
   }
 
-  // Empty cart
+  // Empty cart - but check for pending orders first
   if (!cart || cart.items.length === 0) {
+    // Show loading while checking for pending orders
+    if (checkingPendingOrder) {
+      return (
+        <div className="min-h-[60vh] flex items-center justify-center bg-[var(--sky-bg)]">
+          <div className="h-10 w-10 animate-spin rounded-full border-2 border-[var(--sky-accent)] border-t-transparent" />
+        </div>
+      );
+    }
+
+    // User has a pending order - redirect to order page automatically
+    if (pendingOrder) {
+      // Use effect would cause hydration issues, so we redirect client-side
+      if (typeof window !== "undefined") {
+        window.location.replace(`/orders/${pendingOrder.id}`);
+      }
+      return (
+        <div className="min-h-[60vh] flex items-center justify-center bg-[var(--sky-bg)]">
+          <div className="flex flex-col items-center gap-4">
+            <div className="h-10 w-10 animate-spin rounded-full border-2 border-[var(--sky-accent)] border-t-transparent" />
+            <p className="text-[var(--sky-muted)]">Перенаправлення на ваше замовлення...</p>
+          </div>
+        </div>
+      );
+    }
+
+    // No cart and no pending order - truly empty
     return (
       <div className="min-h-[60vh] flex flex-col items-center justify-center gap-4 px-4 bg-[var(--sky-bg)]">
         <svg className="h-24 w-24 text-[var(--sky-muted)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
@@ -616,9 +929,237 @@ export default function CheckoutPage() {
               </section>
             </div>
 
-            {/* Right Column - Order Summary */}
-            <div className="lg:col-span-1">
-              <div className="sticky top-24 border border-[var(--sky-border)] bg-[var(--sky-surface)] p-6" style={{ borderRadius: 6 }}>
+            {/* Right Column - Payment Method & Order Summary */}
+            <div className="lg:col-span-1 space-y-6">
+              {/* Payment Method Selection */}
+              <div className="border border-[var(--sky-border)] bg-[var(--sky-surface)] p-6" style={{ borderRadius: 6 }}>
+                <h2 className="text-lg font-medium text-[var(--sky-fg)] mb-4">
+                  Спосіб оплати
+                </h2>
+                
+                {/* Payment Method Toggle */}
+                <div className="space-y-3">
+                  {/* Card Payment Option */}
+                  <label
+                    className={`flex items-start gap-4 p-4 border cursor-pointer transition ${
+                      paymentMethod === "card"
+                        ? "border-[var(--sky-accent)] bg-[var(--sky-accent)]/5"
+                        : "border-[var(--sky-border)] hover:border-[var(--sky-fg)]/30"
+                    }`}
+                    style={{ borderRadius: 4 }}
+                  >
+                    <input
+                      type="radio"
+                      name="paymentMethod"
+                      value="card"
+                      checked={paymentMethod === "card"}
+                      onChange={() => handlePaymentMethodChange("card")}
+                      className="sr-only"
+                      disabled={isSubmitting || isPollingStatus}
+                    />
+                    <div className={`flex h-5 w-5 items-center justify-center rounded-full border-2 mt-0.5 ${
+                      paymentMethod === "card"
+                        ? "border-[var(--sky-accent)] bg-[var(--sky-accent)]"
+                        : "border-[var(--sky-border)]"
+                    }`}>
+                      {paymentMethod === "card" && (
+                        <CheckIcon className="h-3 w-3 text-[var(--sky-accent-fg)]" />
+                      )}
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <CreditCardIcon className="h-5 w-5 text-[var(--sky-fg)]" />
+                        <span className="font-medium text-[var(--sky-fg)]">Оплата карткою</span>
+                      </div>
+                      <p className="text-sm text-[var(--sky-muted)] mt-1">
+                        Monobank · Visa · Mastercard
+                      </p>
+                    </div>
+                  </label>
+                  
+                  {/* Installments Option */}
+                  <label
+                    className={`flex items-start gap-4 p-4 border cursor-pointer transition ${
+                      paymentMethod === "installments"
+                        ? "border-[var(--sky-accent)] bg-[var(--sky-accent)]/5"
+                        : "border-[var(--sky-border)] hover:border-[var(--sky-fg)]/30"
+                    }`}
+                    style={{ borderRadius: 4 }}
+                  >
+                    <input
+                      type="radio"
+                      name="paymentMethod"
+                      value="installments"
+                      checked={paymentMethod === "installments"}
+                      onChange={() => handlePaymentMethodChange("installments")}
+                      className="sr-only"
+                      disabled={isSubmitting || isPollingStatus}
+                    />
+                    <div className={`flex h-5 w-5 items-center justify-center rounded-full border-2 mt-0.5 ${
+                      paymentMethod === "installments"
+                        ? "border-[var(--sky-accent)] bg-[var(--sky-accent)]"
+                        : "border-[var(--sky-border)]"
+                    }`}>
+                      {paymentMethod === "installments" && (
+                        <CheckIcon className="h-3 w-3 text-[var(--sky-accent-fg)]" />
+                      )}
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <CalendarIcon className="h-5 w-5 text-[var(--sky-fg)]" />
+                        <span className="font-medium text-[var(--sky-fg)]">Покупка частинами</span>
+                      </div>
+                      <p className="text-sm text-[var(--sky-muted)] mt-1">
+                        Monobank · {selectedInstallmentOption ? `від ${formatPrice(selectedInstallmentOption.monthlyAmount)} ₴/міс` : "Розстрочка"}
+                      </p>
+                    </div>
+                  </label>
+                </div>
+                
+                {/* Installments Period Selector */}
+                {paymentMethod === "installments" && (
+                  <div className="mt-4 pt-4 border-t border-[var(--sky-border)]">
+                    <label className="block text-sm font-medium text-[var(--sky-fg)] mb-3">
+                      Термін розстрочки
+                    </label>
+                    <div className="grid grid-cols-4 gap-2">
+                      {INSTALLMENT_PERIODS.map((months) => {
+                        const option = installmentOptions.find((o) => o.months === months);
+                        return (
+                          <button
+                            key={months}
+                            type="button"
+                            onClick={() => setInstallmentMonths(months)}
+                            disabled={isSubmitting || isPollingStatus}
+                            className={`p-3 border text-center transition ${
+                              installmentMonths === months
+                                ? "border-[var(--sky-accent)] bg-[var(--sky-accent)]/10 text-[var(--sky-accent)]"
+                                : "border-[var(--sky-border)] hover:border-[var(--sky-fg)]/30 text-[var(--sky-fg)]"
+                            } disabled:opacity-50`}
+                            style={{ borderRadius: 4 }}
+                          >
+                            <span className="text-lg font-semibold">{months}</span>
+                            <span className="block text-xs text-[var(--sky-muted)]">міс</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    
+                    {/* Monthly payment display */}
+                    {selectedInstallmentOption && (
+                      <div className="mt-4 p-3 bg-[var(--sky-bg)] rounded" style={{ borderRadius: 4 }}>
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm text-[var(--sky-muted)]">Щомісячний платіж</span>
+                          <span className="text-lg font-semibold text-[var(--sky-fg)]">
+                            {formatPrice(selectedInstallmentOption.monthlyAmount)} ₴
+                          </span>
+                        </div>
+                        <p className="text-xs text-[var(--sky-muted)] mt-2 flex items-start gap-1.5">
+                          <InfoIcon className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" />
+                          Підтвердження в застосунку monobank
+                        </p>
+                      </div>
+                    )}
+                    
+                    {/* Test scenario info (dev only) */}
+                    {process.env.NODE_ENV === "development" && formData.phone && (
+                      <div className="mt-3 text-xs text-[var(--sky-muted)] p-2 bg-yellow-50 dark:bg-yellow-900/20 rounded">
+                        {getTestScenarioInfo(formData.phone)}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+              
+              {/* Installment Status Banner */}
+              {installmentStatus && (
+                <div className={`p-4 border ${
+                  installmentStatus === "APPROVED" ? "border-green-300 bg-green-50 dark:border-green-800 dark:bg-green-900/20" :
+                  installmentStatus === "DECLINED" ? "border-red-300 bg-red-50 dark:border-red-800 dark:bg-red-900/20" :
+                  "border-blue-300 bg-blue-50 dark:border-blue-800 dark:bg-blue-900/20"
+                }`} style={{ borderRadius: 6 }}>
+                  {installmentStatus === "PENDING_CUSTOMER" && (
+                    <div className="flex items-start gap-3">
+                      <SpinnerIcon className="h-5 w-5 text-blue-500 flex-shrink-0" />
+                      <div>
+                        <p className="font-medium text-blue-700 dark:text-blue-400">
+                          Очікуємо підтвердження
+                        </p>
+                        <p className="text-sm text-blue-600 dark:text-blue-500 mt-1">
+                          Підтвердіть заявку в застосунку monobank
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {installmentStatus === "PENDING_MERCHANT" && (
+                    <div className="space-y-3">
+                      <div className="flex items-start gap-3">
+                        <InfoIcon className="h-5 w-5 text-blue-500 flex-shrink-0" />
+                        <div>
+                          <p className="font-medium text-blue-700 dark:text-blue-400">
+                            Потрібне підтвердження магазину
+                          </p>
+                          <p className="text-sm text-blue-600 dark:text-blue-500 mt-1">
+                            Клієнт підтвердив заявку. Натисніть кнопку нижче для завершення.
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleMerchantConfirm}
+                        disabled={isSubmitting}
+                        className="w-full flex items-center justify-center gap-2 bg-[var(--sky-accent)] px-4 py-3 text-sm font-medium text-[var(--sky-accent-fg)] transition hover:opacity-90 disabled:opacity-50"
+                        style={{ borderRadius: 4 }}
+                      >
+                        {isSubmitting ? (
+                          <>
+                            <SpinnerIcon className="h-4 w-4" />
+                            Підтвердження...
+                          </>
+                        ) : (
+                          "Підтвердити угоду"
+                        )}
+                      </button>
+                    </div>
+                  )}
+                  
+                  {installmentStatus === "APPROVED" && (
+                    <div className="flex items-start gap-3">
+                      <CheckIcon className="h-5 w-5 text-green-500 flex-shrink-0" />
+                      <div>
+                        <p className="font-medium text-green-700 dark:text-green-400">
+                          Розстрочку схвалено!
+                        </p>
+                        <p className="text-sm text-green-600 dark:text-green-500 mt-1">
+                          Перенаправлення на сторінку замовлення...
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+              
+              {/* Installment Error */}
+              {installmentError && (
+                <div className="p-4 border border-red-300 bg-red-50 dark:border-red-800 dark:bg-red-900/20" style={{ borderRadius: 6 }}>
+                  <p className="text-sm text-red-700 dark:text-red-400">{installmentError}</p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setInstallmentError(null);
+                      setInstallmentStatus(null);
+                      handlePaymentMethodChange("card");
+                    }}
+                    className="mt-2 text-sm text-red-600 dark:text-red-500 underline hover:no-underline"
+                  >
+                    Спробувати інший спосіб оплати
+                  </button>
+                </div>
+              )}
+
+              {/* Order Summary */}
+              <div className="border border-[var(--sky-border)] bg-[var(--sky-surface)] p-6" style={{ borderRadius: 6 }}>
                 <h2 className="text-lg font-medium text-[var(--sky-fg)] mb-4">
                   Ваше замовлення
                 </h2>
@@ -678,17 +1219,24 @@ export default function CheckoutPage() {
                 {/* Submit Button */}
                 <button
                   type="submit"
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || isPollingStatus}
                   className="mt-6 w-full flex items-center justify-center gap-2 bg-[var(--sky-accent)] px-4 py-4 text-sm font-medium text-[var(--sky-accent-fg)] transition hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
                   style={{ borderRadius: 4 }}
                 >
                   {isSubmitting ? (
                     <>
-                      <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                      </svg>
-                      Перехід до оплати...
+                      <SpinnerIcon className="h-4 w-4" />
+                      {paymentMethod === "installments" ? "Створення заявки..." : "Перехід до оплати..."}
+                    </>
+                  ) : isPollingStatus ? (
+                    <>
+                      <SpinnerIcon className="h-4 w-4" />
+                      Очікування...
+                    </>
+                  ) : paymentMethod === "installments" ? (
+                    <>
+                      <CalendarIcon className="h-4 w-4" />
+                      Оформити покупку частинами
                     </>
                   ) : (
                     <>
@@ -730,4 +1278,3 @@ export default function CheckoutPage() {
     </div>
   );
 }
-

@@ -111,16 +111,11 @@ export async function POST(request: NextRequest) {
       });
       console.log("🎉 Order", payment.orderId, "marked as PAID!");
     } else if (shouldUpdateOrderToCancelled(newPaymentStatus)) {
-      // Only cancel if order is still pending payment
-      if (payment.order.status === OrderStatus.PENDING_PAYMENT) {
-        await prisma.order.update({
-          where: { id: payment.orderId },
-          data: {
-            status: OrderStatus.CANCELLED,
-          },
-        });
-        console.log("❌ Order", payment.orderId, "marked as CANCELLED");
-      }
+      // DON'T automatically cancel the order on payment failure!
+      // Keep order in PENDING_PAYMENT so user can retry.
+      // The payment record already tracks the failed attempt.
+      // User can retry via "Повторити оплату" button on order page.
+      console.log("⚠️ Payment failed for order", payment.orderId, "- order stays in PENDING_PAYMENT for retry");
     }
 
     console.log("=".repeat(60) + "\n");

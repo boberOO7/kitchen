@@ -2,12 +2,88 @@
 
 import { prisma } from "@/lib/prisma";
 import { requireAppUser } from "@/lib/auth";
+import { expirePendingOrders } from "@/server/orders/expirePendingOrders";
+import { calculateMonthlyPayment, getTestScenarioInfo, INSTALLMENT_PERIODS } from "@/lib/monobank-installments";
+
+/**
+ * Check if user has any PENDING_PAYMENT orders (unpaid orders)
+ * Returns the most recent one and total count of pending orders
+ */
+export async function getPendingPaymentOrder() {
+  try {
+    const { appUser } = await requireAppUser();
+
+    // Expire any pending orders before reading (expire-on-read)
+    await expirePendingOrders();
+
+    // Get count of all pending orders
+    const pendingCount = await prisma.order.count({
+      where: {
+        userId: appUser.id,
+        status: "PENDING_PAYMENT",
+      },
+    });
+
+    if (pendingCount === 0) {
+      return { success: true, order: null, pendingCount: 0 };
+    }
+
+    // Get the most recent pending order
+    const pendingOrder = await prisma.order.findFirst({
+      where: {
+        userId: appUser.id,
+        status: "PENDING_PAYMENT",
+      },
+      include: {
+        items: {
+          include: {
+            product: true,
+          },
+        },
+        payments: {
+          orderBy: { createdAt: "desc" },
+          take: 1,
+        },
+      },
+      orderBy: {
+        updatedAt: "desc",
+      },
+    });
+
+    if (!pendingOrder || pendingOrder.items.length === 0) {
+      return { success: true, order: null, pendingCount: 0 };
+    }
+
+    const latestPayment = pendingOrder.payments[0] || null;
+
+    return {
+      success: true,
+      pendingCount,
+      order: {
+        id: pendingOrder.id,
+        status: pendingOrder.status,
+        total: pendingOrder.totalMinor,
+        currency: pendingOrder.currency,
+        itemCount: pendingOrder.items.reduce((sum, item) => sum + item.quantity, 0),
+        createdAt: pendingOrder.createdAt.toISOString(),
+        paymentStatus: latestPayment?.status || null,
+      },
+    };
+  } catch (error) {
+    if (error.message === "UNAUTHORIZED") {
+      return { success: false, error: "UNAUTHORIZED" };
+    }
+    console.error("getPendingPaymentOrder error:", error);
+    return { success: false, error: "Failed to check pending orders" };
+  }
+}
 
 /**
  * Initiate Monobank payment for the user's cart
- * Returns pageUrl for redirect
+ * Saves delivery info to order before creating payment
+ * Returns orderId for client to call the API endpoint
  */
-export async function initiateMonobankPayment() {
+export async function initiateMonobankPayment(deliveryInfo = null) {
   try {
     const { appUser } = await requireAppUser();
 
@@ -32,6 +108,24 @@ export async function initiateMonobankPayment() {
 
     if (order.totalMinor <= 0) {
       return { success: false, error: "Сума замовлення має бути більше 0" };
+    }
+
+    // Save delivery info to order if provided
+    if (deliveryInfo) {
+      await prisma.order.update({
+        where: { id: order.id },
+        data: {
+          deliveryMethod: deliveryInfo.deliveryMethod || null,
+          recipientName: deliveryInfo.firstName && deliveryInfo.lastName 
+            ? `${deliveryInfo.firstName} ${deliveryInfo.lastName}` 
+            : null,
+          recipientPhone: deliveryInfo.phone || null,
+          recipientEmail: deliveryInfo.email || null,
+          deliveryCity: deliveryInfo.city || null,
+          deliveryAddress: deliveryInfo.address || null,
+          comment: deliveryInfo.comment || null,
+        },
+      });
     }
 
     // Return orderId for client to call the API endpoint
@@ -59,9 +153,366 @@ export async function getOrderStatus(orderId) {
 }
 
 /**
- * Get full order details with items, products, and payment info
+ * Get full order details with items, products, payment info, and installment status
  */
 export async function getOrderDetails(orderId) {
+  try {
+    const { appUser } = await requireAppUser();
+
+    // Expire any pending orders before reading (expire-on-read)
+    await expirePendingOrders();
+
+    const order = await prisma.order.findUnique({
+      where: { id: orderId },
+      include: {
+        items: {
+          include: {
+            product: true,
+          },
+        },
+        payments: {
+          orderBy: { createdAt: "desc" },
+          take: 1,
+        },
+        installment: true, // Include installment application if exists
+      },
+    });
+
+    if (!order || order.userId !== appUser.id) {
+      return { success: false, error: "Замовлення не знайдено" };
+    }
+
+    const latestPayment = order.payments[0] || null;
+
+    return {
+      success: true,
+      order: {
+        id: order.id,
+        status: order.status,
+        paymentMethod: order.paymentMethod, // MONO_CARD or MONO_INSTALLMENTS
+        subtotal: order.subtotalMinor, // In minor units (cents/kopeks)
+        total: order.totalMinor, // In minor units (cents/kopeks)
+        currency: order.currency,
+        createdAt: order.createdAt.toISOString(),
+        updatedAt: order.updatedAt.toISOString(),
+        expiresAt: order.expiresAt?.toISOString() || null,
+        expiredAt: order.expiredAt?.toISOString() || null,
+        items: order.items.map((item) => ({
+          id: item.id,
+          name: item.name,
+          unitPrice: item.unitPriceMinor, // In minor units (cents/kopeks)
+          quantity: item.quantity,
+          total: item.totalMinor, // In minor units (cents/kopeks)
+          product: item.product
+            ? {
+                id: item.product.id,
+                name: item.product.name,
+                imageKey: item.product.imageKey,
+              }
+            : null,
+        })),
+        // Delivery info
+        delivery: {
+          method: order.deliveryMethod,
+          recipientName: order.recipientName,
+          phone: order.recipientPhone,
+          email: order.recipientEmail,
+          city: order.deliveryCity,
+          address: order.deliveryAddress,
+          comment: order.comment,
+        },
+      },
+      payment: latestPayment
+        ? {
+            id: latestPayment.id,
+            status: latestPayment.status,
+            provider: latestPayment.provider,
+            amount: latestPayment.amountMinor, // In minor units (cents/kopeks)
+            createdAt: latestPayment.createdAt.toISOString(),
+          }
+        : null,
+      // Installment application info (if payment method is installments)
+      installment: order.installment
+        ? {
+            id: order.installment.id,
+            status: order.installment.status,
+            months: order.installment.months,
+            monthlyAmount: order.installment.monthlyAmount,
+            totalAmount: order.installment.totalAmount,
+            customerPhone: order.installment.customerPhone,
+            createdAt: order.installment.createdAt.toISOString(),
+            updatedAt: order.installment.updatedAt.toISOString(),
+          }
+        : null,
+    };
+  } catch (error) {
+    console.error("getOrderDetails error:", error);
+    
+    if (error.message === "UNAUTHORIZED") {
+      return { success: false, error: "UNAUTHORIZED" };
+    }
+    
+    return { success: false, error: "Не вдалося отримати замовлення" };
+  }
+}
+
+/**
+ * Get available installment options for the current cart
+ */
+export async function getInstallmentOptions() {
+  try {
+    const { appUser } = await requireAppUser();
+
+    // Find user's DRAFT order (cart)
+    const order = await prisma.order.findFirst({
+      where: {
+        userId: appUser.id,
+        status: "DRAFT",
+      },
+    });
+
+    if (!order || order.totalMinor <= 0) {
+      return { success: true, options: [] };
+    }
+
+    // Calculate monthly payments for each period
+    const options = INSTALLMENT_PERIODS.map((months) => ({
+      months,
+      monthlyAmount: calculateMonthlyPayment(order.totalMinor, months),
+      totalAmount: order.totalMinor,
+    }));
+
+    return { success: true, options };
+  } catch (error) {
+    console.error("getInstallmentOptions error:", error);
+    
+    if (error.message === "UNAUTHORIZED") {
+      return { success: false, error: "UNAUTHORIZED" };
+    }
+    
+    return { success: false, error: "Не вдалося отримати опції розстрочки" };
+  }
+}
+
+/**
+ * Get test scenario info for development
+ */
+export async function getInstallmentTestScenario(phone) {
+  return {
+    success: true,
+    scenario: getTestScenarioInfo(phone),
+  };
+}
+
+/**
+ * Get all orders for the current user (excluding DRAFT orders which are carts)
+ */
+export async function getUserOrders() {
+  try {
+    const { appUser } = await requireAppUser();
+
+    // Expire any pending orders before reading (expire-on-read)
+    await expirePendingOrders();
+
+    const orders = await prisma.order.findMany({
+      where: {
+        userId: appUser.id,
+        status: {
+          not: "DRAFT", // Exclude DRAFT orders (carts)
+        },
+      },
+      include: {
+        items: {
+          include: {
+            product: true,
+          },
+        },
+        payments: {
+          orderBy: { createdAt: "desc" },
+          take: 1,
+        },
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+    });
+
+    return {
+      success: true,
+      orders: orders.map((order) => {
+        const latestPayment = order.payments[0] || null;
+        return {
+          id: order.id,
+          status: order.status,
+          subtotal: order.subtotalMinor,
+          total: order.totalMinor,
+          currency: order.currency,
+          createdAt: order.createdAt.toISOString(),
+          updatedAt: order.updatedAt.toISOString(),
+          itemCount: order.items.reduce((sum, item) => sum + item.quantity, 0),
+          items: order.items.map((item) => ({
+            id: item.id,
+            name: item.name,
+            unitPrice: item.unitPriceMinor,
+            quantity: item.quantity,
+            total: item.totalMinor,
+            product: item.product
+              ? {
+                  id: item.product.id,
+                  name: item.product.name,
+                  imageKey: item.product.imageKey,
+                }
+              : null,
+          })),
+          payment: latestPayment
+            ? {
+                id: latestPayment.id,
+                status: latestPayment.status,
+                provider: latestPayment.provider,
+              }
+            : null,
+        };
+      }),
+    };
+  } catch (error) {
+    console.error("getUserOrders error:", error);
+
+    if (error.message === "UNAUTHORIZED") {
+      return { success: false, error: "UNAUTHORIZED" };
+    }
+
+    return { success: false, error: "Не вдалося отримати замовлення" };
+  }
+}
+
+/**
+ * Revert a PENDING_PAYMENT order back to DRAFT status (for editing/resuming checkout)
+ * Returns delivery info for prefilling checkout form
+ */
+export async function revertOrderToDraft(orderId) {
+  try {
+    const { appUser } = await requireAppUser();
+
+    const order = await prisma.order.findUnique({
+      where: { id: orderId },
+      include: {
+        payments: {
+          orderBy: { createdAt: "desc" },
+          take: 1,
+        },
+      },
+    });
+
+    if (!order || order.userId !== appUser.id) {
+      return { success: false, error: "Замовлення не знайдено" };
+    }
+
+    // Only revert PENDING_PAYMENT orders
+    if (order.status !== "PENDING_PAYMENT") {
+      return { success: false, error: "Замовлення не можна відновити" };
+    }
+
+    // Check if payment was successful - don't revert if paid
+    const latestPayment = order.payments[0];
+    if (latestPayment?.status === "SUCCEEDED") {
+      return { success: false, error: "Замовлення вже оплачено" };
+    }
+
+    // Revert to DRAFT and clear expiration
+    await prisma.order.update({
+      where: { id: orderId },
+      data: {
+        status: "DRAFT",
+        activePaymentId: null,
+        expiresAt: null,
+        expiredAt: null,
+      },
+    });
+
+    // Return delivery info for prefilling checkout form
+    return { 
+      success: true,
+      deliveryInfo: {
+        firstName: order.recipientName?.split(' ')[0] || '',
+        lastName: order.recipientName?.split(' ').slice(1).join(' ') || '',
+        email: order.recipientEmail || '',
+        phone: order.recipientPhone || '',
+        city: order.deliveryCity || '',
+        address: order.deliveryAddress || '',
+        deliveryMethod: order.deliveryMethod || '',
+        comment: order.comment || '',
+      },
+    };
+  } catch (error) {
+    console.error("revertOrderToDraft error:", error);
+
+    if (error.message === "UNAUTHORIZED") {
+      return { success: false, error: "UNAUTHORIZED" };
+    }
+
+    return { success: false, error: "Не вдалося відновити замовлення" };
+  }
+}
+
+/**
+ * Cancel a PENDING_PAYMENT order
+ * User can cancel their order before payment is completed
+ */
+export async function cancelOrder(orderId) {
+  try {
+    const { appUser } = await requireAppUser();
+
+    const order = await prisma.order.findUnique({
+      where: { id: orderId },
+      include: {
+        payments: {
+          orderBy: { createdAt: "desc" },
+          take: 1,
+        },
+      },
+    });
+
+    if (!order || order.userId !== appUser.id) {
+      return { success: false, error: "Замовлення не знайдено" };
+    }
+
+    // Only cancel PENDING_PAYMENT orders
+    if (order.status !== "PENDING_PAYMENT") {
+      return { success: false, error: "Замовлення не можна скасувати" };
+    }
+
+    // Check if payment was successful - don't cancel if paid
+    const latestPayment = order.payments[0];
+    if (latestPayment?.status === "SUCCEEDED") {
+      return { success: false, error: "Замовлення вже оплачено" };
+    }
+
+    // Cancel the order
+    await prisma.order.update({
+      where: { id: orderId },
+      data: {
+        status: "CANCELLED",
+        activePaymentId: null,
+      },
+    });
+
+    return { success: true };
+  } catch (error) {
+    console.error("cancelOrder error:", error);
+
+    if (error.message === "UNAUTHORIZED") {
+      return { success: false, error: "UNAUTHORIZED" };
+    }
+
+    return { success: false, error: "Не вдалося скасувати замовлення" };
+  }
+}
+
+/**
+ * Edit order: Cancel the existing order and create a new DRAFT with the same items
+ * Returns delivery info for checkout prefill
+ */
+export async function editOrderAsNewDraft(orderId) {
   try {
     const { appUser } = await requireAppUser();
 
@@ -84,51 +535,101 @@ export async function getOrderDetails(orderId) {
       return { success: false, error: "Замовлення не знайдено" };
     }
 
-    const latestPayment = order.payments[0] || null;
+    // Only edit PENDING_PAYMENT orders
+    if (order.status !== "PENDING_PAYMENT") {
+      return { success: false, error: "Замовлення не можна редагувати" };
+    }
 
-    return {
-      success: true,
-      order: {
-        id: order.id,
-        status: order.status,
-        subtotal: order.subtotalMinor, // In minor units (cents/kopeks)
-        total: order.totalMinor, // In minor units (cents/kopeks)
-        currency: order.currency,
-        createdAt: order.createdAt.toISOString(),
-        updatedAt: order.updatedAt.toISOString(),
-        items: order.items.map((item) => ({
-          id: item.id,
-          name: item.name,
-          unitPrice: item.unitPriceMinor, // In minor units (cents/kopeks)
-          quantity: item.quantity,
-          total: item.totalMinor, // In minor units (cents/kopeks)
-          product: item.product
-            ? {
-                id: item.product.id,
-                name: item.product.name,
-                imageKey: item.product.imageKey,
-              }
-            : null,
-        })),
+    // Check if payment was successful - don't edit if paid
+    const latestPayment = order.payments[0];
+    if (latestPayment?.status === "SUCCEEDED") {
+      return { success: false, error: "Замовлення вже оплачено" };
+    }
+
+    // Check if user already has a DRAFT order
+    const existingDraft = await prisma.order.findFirst({
+      where: {
+        userId: appUser.id,
+        status: "DRAFT",
       },
-      payment: latestPayment
-        ? {
-            id: latestPayment.id,
-            status: latestPayment.status,
-            provider: latestPayment.provider,
-            amount: latestPayment.amountMinor, // In minor units (cents/kopeks)
-            createdAt: latestPayment.createdAt.toISOString(),
-          }
-        : null,
+    });
+
+    if (existingDraft) {
+      // Delete existing draft (we'll create a new one with items from the order)
+      await prisma.orderItem.deleteMany({
+        where: { orderId: existingDraft.id },
+      });
+      await prisma.order.delete({
+        where: { id: existingDraft.id },
+      });
+    }
+
+    // Cancel the existing order
+    await prisma.order.update({
+      where: { id: orderId },
+      data: {
+        status: "CANCELLED",
+        activePaymentId: null,
+      },
+    });
+
+    // Create a new DRAFT order with the same items
+    const newOrder = await prisma.order.create({
+      data: {
+        userId: appUser.id,
+        status: "DRAFT",
+        currency: order.currency,
+        subtotalMinor: order.subtotalMinor,
+        totalMinor: order.totalMinor,
+        // Copy delivery info to the new order too
+        deliveryMethod: order.deliveryMethod,
+        recipientName: order.recipientName,
+        recipientPhone: order.recipientPhone,
+        recipientEmail: order.recipientEmail,
+        deliveryCity: order.deliveryCity,
+        deliveryAddress: order.deliveryAddress,
+        comment: order.comment,
+      },
+    });
+
+    // Copy items to the new order
+    for (const item of order.items) {
+      await prisma.orderItem.create({
+        data: {
+          orderId: newOrder.id,
+          productId: item.productId,
+          name: item.name,
+          unitPriceMinor: item.unitPriceMinor,
+          quantity: item.quantity,
+          totalMinor: item.totalMinor,
+          configId: item.configId,
+        },
+      });
+    }
+
+    // Return delivery info for prefilling checkout form
+    return { 
+      success: true,
+      newOrderId: newOrder.id,
+      deliveryInfo: {
+        firstName: order.recipientName?.split(' ')[0] || '',
+        lastName: order.recipientName?.split(' ').slice(1).join(' ') || '',
+        email: order.recipientEmail || '',
+        phone: order.recipientPhone || '',
+        city: order.deliveryCity || '',
+        address: order.deliveryAddress || '',
+        deliveryMethod: order.deliveryMethod || '',
+        comment: order.comment || '',
+      },
     };
   } catch (error) {
-    console.error("getOrderDetails error:", error);
-    
+    console.error("editOrderAsNewDraft error:", error);
+
     if (error.message === "UNAUTHORIZED") {
       return { success: false, error: "UNAUTHORIZED" };
     }
-    
-    return { success: false, error: "Не вдалося отримати замовлення" };
+
+    return { success: false, error: "Не вдалося редагувати замовлення" };
   }
 }
 

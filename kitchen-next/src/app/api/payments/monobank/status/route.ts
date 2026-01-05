@@ -5,7 +5,6 @@ import {
   monoGetInvoiceStatus,
   mapMonoStatusToPaymentStatus,
   shouldUpdateOrderToPaid,
-  shouldUpdateOrderToCancelled,
 } from "@/lib/monobank";
 import { PaymentProvider, OrderStatus } from "@prisma/client";
 
@@ -78,16 +77,9 @@ export async function GET(request: NextRequest) {
           status: OrderStatus.PAID,
         },
       });
-    } else if (shouldUpdateOrderToCancelled(newPaymentStatus)) {
-      if (payment.order.status === OrderStatus.PENDING_PAYMENT) {
-        await prisma.order.update({
-          where: { id: payment.orderId },
-          data: {
-            status: OrderStatus.CANCELLED,
-          },
-        });
-      }
     }
+    // DON'T cancel order on payment failure - let user retry
+    // Payment record tracks the failed attempt
 
     // 8. Return status
     return NextResponse.json({

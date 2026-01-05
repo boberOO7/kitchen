@@ -15,6 +15,7 @@ export type OrderStatus =
   | "PENDING_PAYMENT"  // Order complete, waiting for payment
   | "PAID"
   | "CANCELLED"
+  | "EXPIRED"          // Payment window expired (48 hours)
   | "REFUNDED";
 
 // Shipment types
@@ -40,11 +41,17 @@ export interface Order {
   shipment?: Shipment | null;
 }
 
+// Simple order reference (just the ID for navigation)
+export interface OrderRef {
+  id: string;
+}
+
 // Account summary for header dropdown
 export interface AccountSummary {
   activeShipment?: Shipment;           // Order in transit
-  pendingPaymentOrder?: Order;         // Order awaiting payment (complete, ready to pay)
-  draftOrder?: Order;                  // Order in progress (checkout started but not complete)
+  pendingPaymentOrder?: OrderRef;      // Most recent order awaiting payment
+  pendingPaymentCount?: number;        // Total count of pending payment orders
+  draftOrder?: OrderRef;               // Order in progress (just need ID for link)
   cartCount: number;
 }
 

@@ -40,10 +40,11 @@ function formatCart(cart) {
 }
 
 /**
- * Get or create DRAFT order (cart) for current user
+ * Get existing DRAFT order (cart) for current user - READ ONLY
+ * Does NOT create a new cart if none exists
  */
-async function getOrCreateCart(userId) {
-  let cart = await prisma.order.findFirst({
+async function getExistingCart(userId) {
+  return await prisma.order.findFirst({
     where: {
       userId,
       status: "DRAFT",
@@ -56,25 +57,37 @@ async function getOrCreateCart(userId) {
       },
     },
   });
+}
 
-  if (!cart) {
-    cart = await prisma.order.create({
-      data: {
-        userId,
-        status: "DRAFT",
-        currency: "USD",
-        subtotalMinor: 0,
-        totalMinor: 0,
-      },
-      include: {
-        items: {
-          include: {
-            product: true,
-          },
+/**
+ * Get or create DRAFT order (cart) for current user
+ * Only call this when actually adding items to cart!
+ */
+async function getOrCreateCart(userId) {
+  // Try to find existing DRAFT order
+  let cart = await getExistingCart(userId);
+
+  if (cart) {
+    return cart;
+  }
+
+  // No DRAFT order found - create a new cart
+  cart = await prisma.order.create({
+    data: {
+      userId,
+      status: "DRAFT",
+      currency: "USD",
+      subtotalMinor: 0,
+      totalMinor: 0,
+    },
+    include: {
+      items: {
+        include: {
+          product: true,
         },
       },
-    });
-  }
+    },
+  });
 
   return cart;
 }
@@ -101,15 +114,16 @@ async function getFreshCart(userId) {
 
 /**
  * Get current user's cart with items and products
+ * Does NOT create a new cart if none exists - returns null cart
  */
 export async function getCart() {
   try {
     const { appUser } = await requireAppUser();
-    const cart = await getOrCreateCart(appUser.id);
+    const cart = await getExistingCart(appUser.id);
 
     return {
       success: true,
-      cart: formatCart(cart),
+      cart: formatCart(cart), // Will return null if no cart exists
     };
   } catch (error) {
     if (error.message === "UNAUTHORIZED") {

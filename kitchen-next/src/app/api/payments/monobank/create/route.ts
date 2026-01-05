@@ -8,6 +8,7 @@ import {
 } from "@/lib/monobank";
 import { getProductImageUrl } from "@/lib/storage";
 import { PaymentProvider, PaymentStatus, OrderStatus } from "@prisma/client";
+import { getOrderExpirationDate } from "@/server/orders/expirePendingOrders";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helper: Get origin URL
@@ -129,7 +130,7 @@ export async function POST(request: NextRequest) {
     console.log("   APP_URL env:", appUrl || "❌ NOT SET!");
     console.log("   Origin:", origin);
     console.log("   🔔 WEBHOOK URL:", webhookUrl);
-    console.log("   🔄 Redirect URL:", `${origin}/orders/${order.id}?success=1`);
+    console.log("   🔄 Redirect URL:", `${origin}/orders/${order.id}`);
     
     if (!appUrl) {
       console.log("\n⚠️  WARNING: APP_URL not set! Monobank webhook will fail!");
@@ -155,7 +156,7 @@ export async function POST(request: NextRequest) {
             : undefined,
         })),
       },
-      redirectUrl: `${origin}/orders/${order.id}?success=1`,
+      redirectUrl: `${origin}/orders/${order.id}`,
       webHookUrl: webhookUrl, // <-- USING PUBLIC URL!
       validity: 3600,
       paymentType: "debit",
@@ -184,12 +185,13 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // 10. Update Order status and activePaymentId
+    // 10. Update Order status, activePaymentId, and set expiration
     await prisma.order.update({
       where: { id: order.id },
       data: {
         status: OrderStatus.PENDING_PAYMENT,
         activePaymentId: payment.id,
+        expiresAt: getOrderExpirationDate(), // 48 hours from now
       },
     });
 
