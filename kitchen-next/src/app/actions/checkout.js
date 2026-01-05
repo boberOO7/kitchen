@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAppUser } from "@/lib/auth";
 import { expirePendingOrders } from "@/server/orders/expirePendingOrders";
 import { calculateMonthlyPayment, getTestScenarioInfo, INSTALLMENT_PERIODS } from "@/lib/monobank-installments";
+import { getNbuUsdRate, convertUsdToUah, getExchangeRateInfo } from "@/lib/nbu";
 
 /**
  * Check if user has any PENDING_PAYMENT orders (unpaid orders)
@@ -110,29 +111,54 @@ export async function initiateMonobankPayment(deliveryInfo = null) {
       return { success: false, error: "Сума замовлення має бути більше 0" };
     }
 
-    // Save delivery info to order if provided
+    // Get current NBU exchange rate and fix it for this order
+    let exchangeRate;
+    try {
+      exchangeRate = await getNbuUsdRate();
+    } catch (rateError) {
+      console.error("Failed to get NBU rate:", rateError);
+      return { 
+        success: false, 
+        error: "Не вдалося отримати курс НБУ. Спробуйте пізніше." 
+      };
+    }
+    const totalUahMinor = convertUsdToUah(order.totalMinor, exchangeRate);
+
+    // Save delivery info and fix exchange rate
+    const updateData = {
+      // Fix exchange rate at order confirmation
+      exchangeRateNbu: exchangeRate,
+      totalUahMinor: totalUahMinor,
+      rateFixedAt: new Date(),
+    };
+
+    // Add delivery info if provided
     if (deliveryInfo) {
-      await prisma.order.update({
-        where: { id: order.id },
-        data: {
-          deliveryMethod: deliveryInfo.deliveryMethod || null,
-          recipientName: deliveryInfo.firstName && deliveryInfo.lastName 
-            ? `${deliveryInfo.firstName} ${deliveryInfo.lastName}` 
-            : null,
-          recipientPhone: deliveryInfo.phone || null,
-          recipientEmail: deliveryInfo.email || null,
-          deliveryCity: deliveryInfo.city || null,
-          deliveryAddress: deliveryInfo.address || null,
-          comment: deliveryInfo.comment || null,
-        },
+      Object.assign(updateData, {
+        deliveryMethod: deliveryInfo.deliveryMethod || null,
+        recipientName: deliveryInfo.firstName && deliveryInfo.lastName 
+          ? `${deliveryInfo.firstName} ${deliveryInfo.lastName}` 
+          : null,
+        recipientPhone: deliveryInfo.phone || null,
+        recipientEmail: deliveryInfo.email || null,
+        deliveryCity: deliveryInfo.city || null,
+        deliveryAddress: deliveryInfo.address || null,
+        comment: deliveryInfo.comment || null,
       });
     }
+
+    await prisma.order.update({
+      where: { id: order.id },
+      data: updateData,
+    });
 
     // Return orderId for client to call the API endpoint
     // We use API endpoint because we need request headers for origin URL
     return { 
       success: true, 
       orderId: order.id,
+      exchangeRate,
+      totalUahMinor,
     };
   } catch (error) {
     console.error("initiateMonobankPayment error:", error);
@@ -192,6 +218,8 @@ export async function getOrderDetails(orderId) {
         paymentMethod: order.paymentMethod, // MONO_CARD or MONO_INSTALLMENTS
         subtotal: order.subtotalMinor, // In minor units (cents/kopeks)
         total: order.totalMinor, // In minor units (cents/kopeks)
+        totalUah: order.totalUahMinor, // UAH kopeks (rounded to whole hryvnias)
+        exchangeRate: order.exchangeRateNbu, // Exchange rate at order time
         currency: order.currency,
         createdAt: order.createdAt.toISOString(),
         updatedAt: order.updatedAt.toISOString(),
@@ -275,11 +303,21 @@ export async function getInstallmentOptions() {
       return { success: true, options: [] };
     }
 
-    // Calculate monthly payments for each period
+    // Get current exchange rate and convert to UAH
+    let totalUah;
+    try {
+      const exchangeRate = await getNbuUsdRate();
+      totalUah = convertUsdToUah(order.totalMinor, exchangeRate);
+    } catch (rateError) {
+      console.error("Failed to get NBU rate for installments:", rateError);
+      return { success: false, error: "Не вдалося отримати курс НБУ" };
+    }
+
+    // Calculate monthly payments for each period (in UAH)
     const options = INSTALLMENT_PERIODS.map((months) => ({
       months,
-      monthlyAmount: calculateMonthlyPayment(order.totalMinor, months),
-      totalAmount: order.totalMinor,
+      monthlyAmount: calculateMonthlyPayment(totalUah, months),
+      totalAmount: totalUah,
     }));
 
     return { success: true, options };
@@ -346,6 +384,8 @@ export async function getUserOrders() {
           status: order.status,
           subtotal: order.subtotalMinor,
           total: order.totalMinor,
+          totalUah: order.totalUahMinor, // UAH amount (already rounded to whole hryvnias)
+          exchangeRate: order.exchangeRateNbu, // Exchange rate at order time
           currency: order.currency,
           createdAt: order.createdAt.toISOString(),
           updatedAt: order.updatedAt.toISOString(),
@@ -630,6 +670,28 @@ export async function editOrderAsNewDraft(orderId) {
     }
 
     return { success: false, error: "Не вдалося редагувати замовлення" };
+  }
+}
+
+/**
+ * Get current NBU exchange rate for USD/UAH
+ * Used for displaying estimated UAH price on checkout before order confirmation
+ */
+export async function getCurrentExchangeRate() {
+  try {
+    const { rate, date, dateFormatted } = await getExchangeRateInfo();
+    return {
+      success: true,
+      rate,
+      date,           // NBU date (DD.MM.YYYY)
+      dateFormatted,  // Human-readable date
+    };
+  } catch (error) {
+    console.error("getCurrentExchangeRate error:", error);
+    return {
+      success: false,
+      error: "Не вдалося отримати курс НБУ. Спробуйте пізніше.",
+    };
   }
 }
 

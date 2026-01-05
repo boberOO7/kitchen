@@ -25,7 +25,13 @@ export default function CartDrawer() {
     clearCart,
   } = useCart();
 
-  // Close drawer on escape key + prevent body scroll without layout shift
+  // Unlock scroll - called when exit animation completes
+  const unlockScroll = () => {
+    document.body.style.overflow = "";
+    document.body.style.paddingRight = "";
+  };
+
+  // Close drawer on escape key + lock scroll when open
   useEffect(() => {
     const handleEscape = (e) => {
       if (e.key === "Escape") closeDrawer();
@@ -44,13 +50,13 @@ export default function CartDrawer() {
     
     return () => {
       document.removeEventListener("keydown", handleEscape);
-      document.body.style.overflow = "";
-      document.body.style.paddingRight = "";
+      // Note: scroll unlock is handled by onExitComplete, not here
+      // This prevents scroll appearing while drawer is still animating out
     };
   }, [isDrawerOpen, closeDrawer]);
 
   return (
-    <AnimatePresence>
+    <AnimatePresence onExitComplete={unlockScroll}>
       {isDrawerOpen && (
         <>
           {/* Backdrop */}

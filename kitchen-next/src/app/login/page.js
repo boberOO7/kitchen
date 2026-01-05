@@ -1,9 +1,14 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
 export default function LoginPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const redirectTo = searchParams.get("redirect") || "/";
+
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState(null);
@@ -18,16 +23,25 @@ export default function LoginPage() {
       const { data: { user } } = await supabase.auth.getUser();
       setUser(user);
       setCheckingAuth(false);
+      
+      // If user is already logged in, redirect to the target page
+      if (user) {
+        router.replace(redirectTo);
+      }
     }
     checkUser();
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
+      // Redirect on successful login
+      if (session?.user) {
+        router.replace(redirectTo);
+      }
     });
 
     return () => subscription.unsubscribe();
-  }, [supabase.auth]);
+  }, [supabase.auth, router, redirectTo]);
 
   async function handleLogin(e) {
     e.preventDefault();
@@ -54,10 +68,16 @@ export default function LoginPage() {
     setLoading(true);
     setMessage(null);
 
+    // Include redirect parameter in callback URL
+    const callbackUrl = new URL("/auth/callback", location.origin);
+    if (redirectTo && redirectTo !== "/") {
+      callbackUrl.searchParams.set("redirect", redirectTo);
+    }
+
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${location.origin}/auth/callback`,
+        redirectTo: callbackUrl.toString(),
         queryParams: {
           prompt: "select_account",
         },

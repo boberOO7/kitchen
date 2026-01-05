@@ -5,6 +5,7 @@ import { requireAppUser } from "@/lib/auth";
 // ─────────────────────────────────────────────────────────────────────────────
 // GET /api/payments/mono-installments/status?orderId=xxx
 // Get current installment application status for an order
+// Also actively polls Mono API if status is PENDING_CUSTOMER (fallback for webhooks)
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function GET(request: NextRequest) {
@@ -54,6 +55,8 @@ export async function GET(request: NextRequest) {
     }
 
     // 6. Return status
+    // Note: We rely on webhooks from Mono to update status.
+    // Demo API doesn't support /api/order/status polling endpoint.
     return NextResponse.json({
       status: order.installment.status,
       applicationId: order.installment.monoApplicationId,

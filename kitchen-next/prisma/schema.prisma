@@ -83,6 +83,11 @@ model Order {
   totalMinor      Int         @default(0) // Total in minor units (cents/kopeks)
   activePaymentId String?     @unique
   
+  // UAH conversion (fixed at order confirmation)
+  exchangeRateNbu Float?              // USD/UAH rate from NBU at order confirmation
+  totalUahMinor   Int?                // Total in UAH kopeks (totalMinor * exchangeRateNbu)
+  rateFixedAt     DateTime?           // When the exchange rate was fixed
+  
   // Payment method selected by user
   paymentMethod   PaymentMethod?  // MONO_CARD or MONO_INSTALLMENTS
   

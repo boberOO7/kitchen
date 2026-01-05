@@ -102,6 +102,7 @@ export async function POST(request: NextRequest) {
     const storeOrderId = (payload as Record<string, unknown>).store_order_id as string | undefined;
     const applicationId = extractApplicationIdFromCallback(payload);
     const status = extractStatusFromCallback(payload);
+    const subState = (payload as Record<string, unknown>).order_sub_state as string | undefined;
     const monthlyAmount = payload.monthly_amount || payload.monthlyAmount;
     const failureReason = payload.failure_reason || payload.failureReason;
 
@@ -111,6 +112,7 @@ export async function POST(request: NextRequest) {
     console.log("   store_order_id (our ID):", storeOrderId);
     console.log("   Application ID:", applicationId);
     console.log("   Status:", status);
+    console.log("   Sub-state:", subState || "none");
     console.log("   Monthly Amount:", monthlyAmount);
     console.log("   Failure Reason:", failureReason || "none");
 
@@ -148,7 +150,7 @@ export async function POST(request: NextRequest) {
       InstallmentStatus.EXPIRED,
     ];
 
-    const newStatus = mapMonoInstallmentStatus(status);
+    const newStatus = mapMonoInstallmentStatus(status, subState);
     
     // If current status is terminal and we're receiving the same status, skip
     if (terminalStatuses.includes(installmentApp.status)) {

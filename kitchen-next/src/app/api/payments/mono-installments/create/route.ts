@@ -142,6 +142,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // 7b. Validate UAH amount is set (exchange rate was fixed)
+    if (!order.totalUahMinor || order.totalUahMinor <= 0) {
+      return NextResponse.json(
+        { error: "UAH amount not calculated. Please try again." },
+        { status: 400 }
+      );
+    }
+
     // 8. Check for existing installment application
     if (order.installment) {
       // If there's an existing application that's not terminal, return it
@@ -183,30 +191,33 @@ export async function POST(request: NextRequest) {
     console.log("   Redirect URL:", redirectUrl);
 
     // 10. Create installment application record (with CREATED status)
+    // Use UAH amount - exchange rate was fixed at checkout
+    const totalUah = order.totalUahMinor!;
     const installmentApp = await prisma.installmentApplication.create({
       data: {
         orderId: order.id,
         method: PaymentMethod.MONO_INSTALLMENTS,
         status: InstallmentStatus.CREATED,
         months: months,
-        totalAmount: order.totalMinor,
-        monthlyAmount: calculateMonthlyPayment(order.totalMinor, months),
+        totalAmount: totalUah, // UAH kopeks (rounded to whole hryvnias)
+        monthlyAmount: calculateMonthlyPayment(totalUah, months),
         customerPhone: cleanPhone,
       },
     });
 
     console.log("✅ InstallmentApplication created:", installmentApp.id);
 
-    // 11. Call Monobank API
+    // 11. Call Monobank API (with UAH amount)
     try {
       const monoResponse = await createInstallmentApplication({
         orderId: order.id,
-        totalAmount: order.totalMinor,
+        totalAmount: totalUah, // UAH kopeks (rounded to whole hryvnias)
         customerPhone: cleanPhone,
         months: months,
         products: order.items.map((item) => ({
           name: item.name,
-          price: item.unitPriceMinor,
+          // Convert item price to UAH using same exchange rate
+          price: Math.round((item.unitPriceMinor * order.exchangeRateNbu!) / 100) * 100,
           count: item.quantity,
         })),
         redirectUrl,

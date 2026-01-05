@@ -12,6 +12,7 @@ import SuccessAnimation from "@/components/animations/SuccessAnimation";
 import AnimateOnScroll from "@/components/animations/AnimateOnScroll";
 
 import { formatPriceFromMinor } from "@/lib/currency";
+import { formatUahFromMinor } from "@/lib/nbu";
 
 // Installment status labels
 const INSTALLMENT_STATUS_LABELS = {
@@ -685,9 +686,16 @@ export default function OrderPageContent({ orderId, showSuccessAnimation }) {
                       <div className="mt-4 border-t border-[var(--sky-border)] pt-4">
                         <div className="flex justify-between">
                           <span className="font-medium text-[var(--sky-fg)]">Всього</span>
-                          <span className="text-xl font-medium text-[var(--sky-fg)]">
-                            ${formatPrice(order.total)}
-                          </span>
+                          <div className="text-right">
+                            <span className="text-xl font-medium text-[var(--sky-fg)]">
+                              ${formatPrice(order.total)}
+                            </span>
+                            {order.totalUah && (
+                              <p className="text-sm text-[var(--sky-muted)]">
+                                {formatUahFromMinor(order.totalUah)} ₴
+                              </p>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </div>

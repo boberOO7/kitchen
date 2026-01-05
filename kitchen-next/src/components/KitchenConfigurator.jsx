@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import { Canvas } from "@react-three/fiber";
 import { Bounds, ContactShadows, Environment, OrbitControls, useProgress } from "@react-three/drei";
 import * as THREE from "three";
@@ -10,8 +10,10 @@ import { MODEL_BY_FACADE } from "@/data/constants";
 import { CARCASS_SETS, FACADE_SETS, TOP_SETS } from "@/data/configuratorOptions";
 import { useConfiguratorStore } from "@/stores/useConfiguratorStore";
 import { useCart } from "@/contexts/CartContext";
+import { getCurrentExchangeRate } from "@/app/actions/checkout";
 
 import { formatPriceFromMinor } from "@/lib/currency";
+import { formatUahFromMinor, convertUsdToUah } from "@/lib/nbu";
 
 // Price formatter (converts from minor units for display)
 function formatPrice(minorUnits) {
@@ -97,7 +99,23 @@ function makeChipStyle(opt) {
 export default function KitchenConfigurator({ mode = "embedded", product = null }) {
   const [openSection, setOpenSection] = useState("facade");
   const [isAddingToCart, setIsAddingToCart] = useState(false);
+  const [exchangeRate, setExchangeRate] = useState(null);
   const { addToCart, isPending } = useCart();
+
+  // Fetch exchange rate for UAH display
+  useEffect(() => {
+    async function fetchExchangeRate() {
+      try {
+        const result = await getCurrentExchangeRate();
+        if (result.success && result.rate) {
+          setExchangeRate(result.rate);
+        }
+      } catch (e) {
+        console.error("Failed to fetch exchange rate:", e);
+      }
+    }
+    fetchExchangeRate();
+  }, []);
 
   const facadeId = useConfiguratorStore((s) => s.facadeId);
   const topId = useConfiguratorStore((s) => s.topId);
@@ -222,6 +240,14 @@ export default function KitchenConfigurator({ mode = "embedded", product = null 
                 <div className="mt-2 text-xl font-medium tracking-tight text-[var(--sky-fg)]">
                   ${formatPrice(product.price)}
                 </div>
+                {exchangeRate && product.price && (
+                  <div className="mt-1 text-sm text-[var(--sky-muted)]">
+                    ≈ {formatUahFromMinor(convertUsdToUah(product.price, exchangeRate))} ₴
+                  </div>
+                )}
+                <p className="mt-2 text-[10px] text-[var(--sky-muted2)]">
+                  *Остаточна сума у гривні визначається за курсом НБУ на дату оформлення замовлення
+                </p>
                 <button
                   type="button"
                   onClick={async () => {

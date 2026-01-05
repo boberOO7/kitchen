@@ -7,8 +7,9 @@ import { useRouter } from "next/navigation";
 import { useCart } from "@/contexts/CartContext";
 import { useAuth } from "@/hooks/useAuth";
 import { getProductImageUrl } from "@/lib/storage";
-import { initiateMonobankPayment, getPendingPaymentOrder, getInstallmentOptions } from "@/app/actions/checkout";
+import { initiateMonobankPayment, getPendingPaymentOrder, getInstallmentOptions, getCurrentExchangeRate } from "@/app/actions/checkout";
 import { formatPriceFromMinor } from "@/lib/currency";
+import { formatUahFromMinor, convertUsdToUah } from "@/lib/nbu";
 
 function formatPrice(minorUnits: number) {
   return formatPriceFromMinor(minorUnits);
@@ -381,6 +382,9 @@ export default function CheckoutPage() {
   const [pendingInstallmentOrderId, setPendingInstallmentOrderId] = useState<string | null>(null);
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Exchange rate state (for UAH display)
+  const [exchangeRate, setExchangeRate] = useState<number | null>(null);
+
   // Load saved form data from localStorage on mount
   useEffect(() => {
     try {
@@ -464,6 +468,22 @@ export default function CheckoutPage() {
 
     fetchInstallmentOptions();
   }, [cart]);
+
+  // Fetch exchange rate for UAH display
+  useEffect(() => {
+    async function fetchExchangeRate() {
+      try {
+        const result = await getCurrentExchangeRate();
+        if (result.success && result.rate) {
+          setExchangeRate(result.rate);
+        }
+      } catch (e) {
+        console.error("Failed to fetch exchange rate:", e);
+      }
+    }
+
+    fetchExchangeRate();
+  }, []);
 
   // Cleanup polling on unmount
   useEffect(() => {
@@ -1071,11 +1091,10 @@ export default function CheckoutPage() {
                 )}
               </div>
               
-              {/* Installment Status Banner */}
-              {installmentStatus && (
+              {/* Installment Status Banner - only show for statuses that have content */}
+              {installmentStatus && !["DECLINED", "CANCELED", "EXPIRED"].includes(installmentStatus) && (
                 <div className={`p-4 border ${
                   installmentStatus === "APPROVED" ? "border-green-300 bg-green-50 dark:border-green-800 dark:bg-green-900/20" :
-                  installmentStatus === "DECLINED" ? "border-red-300 bg-red-50 dark:border-red-800 dark:bg-red-900/20" :
                   "border-blue-300 bg-blue-50 dark:border-blue-800 dark:bg-blue-900/20"
                 }`} style={{ borderRadius: 6 }}>
                   {installmentStatus === "PENDING_CUSTOMER" && (
@@ -1210,11 +1229,25 @@ export default function CheckoutPage() {
                   </div>
                   <div className="flex justify-between pt-3 border-t border-[var(--sky-border)]">
                     <span className="text-lg font-medium text-[var(--sky-fg)]">Разом</span>
-                    <span className="text-xl font-semibold text-[var(--sky-fg)]">
-                      ${formatPrice(cart.total)}
-                    </span>
+                    <div className="text-right">
+                      <span className="text-xl font-semibold text-[var(--sky-fg)]">
+                        ${formatPrice(cart.total)}
+                      </span>
+                      {exchangeRate && (
+                        <div className="text-sm text-[var(--sky-muted)]">
+                          ≈ {formatUahFromMinor(convertUsdToUah(cart.total, exchangeRate))} ₴
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
+
+                {/* NBU Rate Notice */}
+                {exchangeRate && (
+                  <p className="text-xs text-[var(--sky-muted2)] mt-3">
+                    Оплата у гривні за курсом НБУ на дату оформлення замовлення
+                  </p>
+                )}
 
                 {/* Submit Button */}
                 <button

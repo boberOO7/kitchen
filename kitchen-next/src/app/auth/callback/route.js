@@ -5,7 +5,8 @@ import { requireAppUser } from "@/lib/auth";
 export async function GET(request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
-  const next = searchParams.get("next") ?? "/";
+  // Support both "next" and "redirect" parameters
+  const redirectTo = searchParams.get("redirect") ?? searchParams.get("next") ?? "/";
 
   if (code) {
     const supabase = await createClient();
@@ -19,7 +20,7 @@ export async function GET(request) {
         console.error("Failed to upsert user:", e);
       }
 
-      return NextResponse.redirect(`${origin}${next}`);
+      return NextResponse.redirect(`${origin}${redirectTo}`);
     }
   }
 

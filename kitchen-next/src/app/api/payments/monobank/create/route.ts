@@ -117,6 +117,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // 6b. Validate UAH amount is set (exchange rate was fixed)
+    if (!order.totalUahMinor || order.totalUahMinor <= 0) {
+      return NextResponse.json(
+        { error: "UAH amount not calculated. Please try again." },
+        { status: 400 }
+      );
+    }
+
     // 7. Build monobank invoice request
     const origin = getOrigin(request);
     
@@ -137,19 +145,51 @@ export async function POST(request: NextRequest) {
       console.log("   Set APP_URL in .env to your ngrok URL");
     }
     
-    // Order total is already stored in minor units (cents/kopeks)
-    const amountMinor = order.totalMinor;
+    // Use UAH amount (kopeks) - exchange rate was fixed at checkout
+    // Ensure it's an integer (Monobank requires integer amount)
+    const amountMinor = Math.round(order.totalUahMinor!);
+
+    // Monobank has a maximum amount limit (~500,000 UAH = 50,000,000 kopeks)
+    const MONOBANK_MAX_AMOUNT = 50_000_000; // 500,000 UAH
+    if (amountMinor > MONOBANK_MAX_AMOUNT) {
+      const maxUah = (MONOBANK_MAX_AMOUNT / 100).toLocaleString("uk-UA");
+      const actualUah = (amountMinor / 100).toLocaleString("uk-UA");
+      console.error(`❌ Amount ${actualUah} UAH exceeds Monobank limit of ${maxUah} UAH`);
+      return NextResponse.json(
+        { 
+          error: `Сума замовлення (${actualUah} ₴) перевищує ліміт оплати картою (${maxUah} ₴). Для великих сум використовуйте "Покупка частинами" або зв'яжіться з нами.` 
+        },
+        { status: 400 }
+      );
+    }
+
+    // Get exchange rate for item price conversion
+    const exchangeRate = order.exchangeRateNbu!;
+
+    // Calculate basket total to verify it matches amount
+    const basketTotal = order.items.reduce((sum, item) => {
+      return sum + Math.round(Math.round((item.totalMinor * exchangeRate) / 100) * 100);
+    }, 0);
+
+    console.log("\n💰 Amount details:");
+    console.log("   USD minor:", order.totalMinor);
+    console.log("   UAH minor (kopeks):", amountMinor);
+    console.log("   Exchange rate:", exchangeRate);
+    console.log("   Basket total:", basketTotal);
+    console.log("   Amount matches basket:", amountMinor === basketTotal);
+    console.log("   Amount type:", typeof amountMinor);
 
     const invoicePayload: MonoInvoiceCreateRequest = {
-      amount: amountMinor, // Already in minor units (cents/kopeks)
-      ccy: getCurrencyCode(order.currency),
+      amount: amountMinor, // UAH kopeks (rounded to whole hryvnias)
+      ccy: getCurrencyCode("UAH"), // Always UAH for Ukrainian payments
       merchantPaymInfo: {
         reference: order.id,
         destination: `Замовлення #${order.id.slice(0, 8)}`,
         basketOrder: order.items.map((item) => ({
           name: item.name,
           qty: item.quantity,
-          sum: item.totalMinor, // Already in minor units
+          // Convert item total to UAH (rounded to whole hryvnias, must be integer)
+          sum: Math.round(Math.round((item.totalMinor * exchangeRate) / 100) * 100),
           unit: "шт.",
           icon: item.product?.imageKey 
             ? getProductImageUrl(item.product.imageKey) 
@@ -172,14 +212,14 @@ export async function POST(request: NextRequest) {
     console.log("   Payment Page:", monoResponse.pageUrl);
     console.log("=".repeat(60) + "\n");
 
-    // 9. Create Payment record
+    // 9. Create Payment record (in UAH)
     const payment = await prisma.payment.create({
       data: {
         orderId: order.id,
         provider: PaymentProvider.MONOBANK,
         status: PaymentStatus.CREATED,
-        amountMinor: amountMinor,
-        currency: order.currency,
+        amountMinor: amountMinor, // UAH kopeks
+        currency: "UAH",
         providerRef: monoResponse.invoiceId,
         raw: monoResponse as object,
       },

@@ -118,9 +118,12 @@ export function verifyInstallmentWebhookSignature(
 
 /**
  * Map Monobank API status to internal InstallmentStatus enum
+ * @param monoStatus - The state field from Monobank callback
+ * @param subState - The order_sub_state field from Monobank callback (optional)
  */
-export function mapMonoInstallmentStatus(monoStatus: string): InstallmentStatus {
+export function mapMonoInstallmentStatus(monoStatus: string, subState?: string): InstallmentStatus {
   const statusLower = monoStatus.toLowerCase();
+  const subStateLower = subState?.toLowerCase();
 
   // Handle various status formats from Monobank
   if (statusLower === "approved" || statusLower === "success" || statusLower === "done") {
@@ -135,6 +138,12 @@ export function mapMonoInstallmentStatus(monoStatus: string): InstallmentStatus 
   if (statusLower === "expired") {
     return InstallmentStatus.EXPIRED;
   }
+  
+  // Check sub_state for more specific status (Scenario 4: 2-step flow)
+  if (subStateLower === "waiting_for_store_confirm" || subStateLower === "waiting for store confirm") {
+    return InstallmentStatus.PENDING_MERCHANT;
+  }
+  
   if (
     statusLower === "waiting_customer" ||
     statusLower === "pending_customer" ||
@@ -153,9 +162,14 @@ export function mapMonoInstallmentStatus(monoStatus: string): InstallmentStatus 
   ) {
     return InstallmentStatus.PENDING_MERCHANT;
   }
+  
+  // IN_PROCESS without specific sub_state means customer needs to confirm
+  if (statusLower === "in_process" || statusLower === "in process") {
+    return InstallmentStatus.PENDING_CUSTOMER;
+  }
 
   // Default to PENDING_CUSTOMER for unknown statuses
-  console.warn(`Unknown Monobank installment status: ${monoStatus}, defaulting to PENDING_CUSTOMER`);
+  console.warn(`Unknown Monobank installment status: ${monoStatus} (subState: ${subState}), defaulting to PENDING_CUSTOMER`);
   return InstallmentStatus.PENDING_CUSTOMER;
 }
 
@@ -442,16 +456,17 @@ export async function merchantConfirmInstallment(
 
   const { storeId, secret, baseUrl } = getInstallmentsConfig();
 
+  // Mono expects order_id (their ID), not store_order_id (our ID)
   const bodyObj = {
-    store_order_id: applicationId,
+    order_id: applicationId,
   };
 
   const rawBody = JSON.stringify(bodyObj);
   const signature = generateInstallmentSignature(rawBody, secret);
 
-  // Try different possible endpoints for merchant confirm
   const url = `${baseUrl}/api/order/confirm`;
   console.log("🌐 URL:", url);
+  console.log("📋 Request body:", rawBody);
 
   const response = await fetch(url, {
     method: "POST",
@@ -490,12 +505,13 @@ export async function merchantConfirmInstallment(
 
 /**
  * Get installment application status from Monobank
+ * @param monoOrderId - Mono's order_id (returned from /api/order/create)
  */
 export async function getInstallmentStatus(
-  applicationId: string
+  monoOrderId: string
 ): Promise<{ status: string; monthlyAmount?: number }> {
   console.log("\n📤 Getting installment status...");
-  console.log("   Application ID:", applicationId);
+  console.log("   Mono Order ID:", monoOrderId);
 
   // Mock mode
   if (shouldUseMock()) {
@@ -507,8 +523,9 @@ export async function getInstallmentStatus(
 
   const { storeId, secret, baseUrl } = getInstallmentsConfig();
 
+  // Use order_id (Mono's ID) instead of store_order_id (our ID)
   const bodyObj = {
-    store_order_id: applicationId,
+    order_id: monoOrderId,
   };
 
   const rawBody = JSON.stringify(bodyObj);
@@ -516,6 +533,7 @@ export async function getInstallmentStatus(
 
   const url = `${baseUrl}/api/order/status`;
   console.log("🌐 URL:", url);
+  console.log("📋 Request body:", rawBody);
 
   const response = await fetch(url, {
     method: "POST",
