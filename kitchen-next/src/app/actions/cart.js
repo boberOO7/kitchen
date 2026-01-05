@@ -1,8 +1,58 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { requireAppUser } from "@/lib/auth";
+import { getAppUser } from "@/lib/auth";
+import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
+
+// Cookie name for anonymous cart ID
+const ANONYMOUS_CART_COOKIE = "sky_cart_id";
+// Cookie max age: 30 days
+const COOKIE_MAX_AGE = 30 * 24 * 60 * 60;
+
+/**
+ * Generate a UUID for anonymous cart
+ */
+function generateCartId() {
+  return crypto.randomUUID();
+}
+
+/**
+ * Get or create anonymous cart ID from cookie
+ */
+async function getOrCreateAnonymousCartId() {
+  const cookieStore = await cookies();
+  let cartId = cookieStore.get(ANONYMOUS_CART_COOKIE)?.value;
+
+  if (!cartId) {
+    cartId = generateCartId();
+    cookieStore.set(ANONYMOUS_CART_COOKIE, cartId, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: COOKIE_MAX_AGE,
+      path: "/",
+    });
+  }
+
+  return cartId;
+}
+
+/**
+ * Get anonymous cart ID from cookie (read only, don't create)
+ */
+async function getAnonymousCartId() {
+  const cookieStore = await cookies();
+  return cookieStore.get(ANONYMOUS_CART_COOKIE)?.value || null;
+}
+
+/**
+ * Clear anonymous cart cookie (after merge or checkout)
+ */
+async function clearAnonymousCartCookie() {
+  const cookieStore = await cookies();
+  cookieStore.delete(ANONYMOUS_CART_COOKIE);
+}
 
 /**
  * Format cart data for client consumption
@@ -40,46 +90,78 @@ function formatCart(cart) {
 }
 
 /**
- * Get existing DRAFT order (cart) for current user - READ ONLY
+ * Get existing DRAFT order (cart) for user or anonymous
  * Does NOT create a new cart if none exists
  */
-async function getExistingCart(userId) {
-  return await prisma.order.findFirst({
-    where: {
-      userId,
-      status: "DRAFT",
-    },
-    include: {
-      items: {
-        include: {
-          product: true,
+async function getExistingCart(userId, anonymousCartId) {
+  // Try user cart first if logged in
+  if (userId) {
+    const userCart = await prisma.order.findFirst({
+      where: {
+        userId,
+        status: "DRAFT",
+      },
+      include: {
+        items: {
+          include: {
+            product: true,
+          },
         },
       },
-    },
-  });
+    });
+    if (userCart) return userCart;
+  }
+
+  // Try anonymous cart
+  if (anonymousCartId) {
+    return await prisma.order.findFirst({
+      where: {
+        anonymousCartId,
+        status: "DRAFT",
+      },
+      include: {
+        items: {
+          include: {
+            product: true,
+          },
+        },
+      },
+    });
+  }
+
+  return null;
 }
 
 /**
- * Get or create DRAFT order (cart) for current user
+ * Get or create DRAFT order (cart) for user or anonymous
  * Only call this when actually adding items to cart!
  */
-async function getOrCreateCart(userId) {
-  // Try to find existing DRAFT order
-  let cart = await getExistingCart(userId);
+async function getOrCreateCart(userId, anonymousCartId) {
+  // Try to find existing cart
+  let cart = await getExistingCart(userId, anonymousCartId);
 
   if (cart) {
     return cart;
   }
 
-  // No DRAFT order found - create a new cart
+  // No cart found - create a new one
+  const data = {
+    status: "DRAFT",
+    currency: "USD",
+    subtotalMinor: 0,
+    totalMinor: 0,
+  };
+
+  if (userId) {
+    data.userId = userId;
+  } else if (anonymousCartId) {
+    data.anonymousCartId = anonymousCartId;
+  } else {
+    throw new Error("Either userId or anonymousCartId is required");
+  }
+
   cart = await prisma.order.create({
-    data: {
-      userId,
-      status: "DRAFT",
-      currency: "USD",
-      subtotalMinor: 0,
-      totalMinor: 0,
-    },
+    data,
     include: {
       items: {
         include: {
@@ -95,12 +177,13 @@ async function getOrCreateCart(userId) {
 /**
  * Fetch fresh cart with all items and return formatted
  */
-async function getFreshCart(userId) {
+async function getFreshCart(userId, anonymousCartId) {
+  const whereClause = userId
+    ? { userId, status: "DRAFT" }
+    : { anonymousCartId, status: "DRAFT" };
+
   const cart = await prisma.order.findFirst({
-    where: {
-      userId,
-      status: "DRAFT",
-    },
+    where: whereClause,
     include: {
       items: {
         include: {
@@ -113,22 +196,134 @@ async function getFreshCart(userId) {
 }
 
 /**
- * Get current user's cart with items and products
+ * Merge anonymous cart into user cart (called after login)
+ */
+export async function mergeAnonymousCart() {
+  try {
+    const { appUser } = await getAppUser();
+    if (!appUser) {
+      return { success: false, error: "Not logged in" };
+    }
+
+    const anonymousCartId = await getAnonymousCartId();
+    if (!anonymousCartId) {
+      return { success: true, merged: false }; // No anonymous cart to merge
+    }
+
+    // Find anonymous cart
+    const anonymousCart = await prisma.order.findFirst({
+      where: {
+        anonymousCartId,
+        status: "DRAFT",
+      },
+      include: {
+        items: true,
+      },
+    });
+
+    if (!anonymousCart || anonymousCart.items.length === 0) {
+      // Clear the cookie anyway
+      await clearAnonymousCartCookie();
+      return { success: true, merged: false };
+    }
+
+    // Find or create user cart
+    let userCart = await prisma.order.findFirst({
+      where: {
+        userId: appUser.id,
+        status: "DRAFT",
+      },
+      include: {
+        items: true,
+      },
+    });
+
+    if (!userCart) {
+      // Just assign the anonymous cart to the user
+      await prisma.order.update({
+        where: { id: anonymousCart.id },
+        data: {
+          userId: appUser.id,
+          anonymousCartId: null,
+        },
+      });
+      await clearAnonymousCartCookie();
+      return { success: true, merged: true };
+    }
+
+    // Merge items from anonymous cart into user cart
+    for (const anonItem of anonymousCart.items) {
+      const existingItem = userCart.items.find(
+        (item) => item.productId === anonItem.productId
+      );
+
+      if (existingItem) {
+        // Increase quantity
+        const newQuantity = existingItem.quantity + anonItem.quantity;
+        const lineTotal = newQuantity * existingItem.unitPriceMinor;
+        await prisma.orderItem.update({
+          where: { id: existingItem.id },
+          data: {
+            quantity: newQuantity,
+            totalMinor: lineTotal,
+          },
+        });
+      } else {
+        // Copy item to user cart
+        await prisma.orderItem.create({
+          data: {
+            orderId: userCart.id,
+            productId: anonItem.productId,
+            name: anonItem.name,
+            unitPriceMinor: anonItem.unitPriceMinor,
+            quantity: anonItem.quantity,
+            totalMinor: anonItem.totalMinor,
+          },
+        });
+      }
+    }
+
+    // Recalculate user cart totals
+    const allItems = await prisma.orderItem.findMany({
+      where: { orderId: userCart.id },
+    });
+    const subtotal = allItems.reduce((sum, i) => sum + i.totalMinor, 0);
+    await prisma.order.update({
+      where: { id: userCart.id },
+      data: { subtotalMinor: subtotal, totalMinor: subtotal },
+    });
+
+    // Delete anonymous cart
+    await prisma.order.delete({
+      where: { id: anonymousCart.id },
+    });
+
+    await clearAnonymousCartCookie();
+
+    return { success: true, merged: true };
+  } catch (error) {
+    console.error("mergeAnonymousCart error:", error);
+    return { success: false, error: "Failed to merge cart" };
+  }
+}
+
+/**
+ * Get current cart (for logged in user or anonymous)
  * Does NOT create a new cart if none exists - returns null cart
  */
 export async function getCart() {
   try {
-    const { appUser } = await requireAppUser();
-    const cart = await getExistingCart(appUser.id);
+    const { appUser } = await getAppUser();
+    const anonymousCartId = await getAnonymousCartId();
+
+    const cart = await getExistingCart(appUser?.id, anonymousCartId);
 
     return {
       success: true,
-      cart: formatCart(cart), // Will return null if no cart exists
+      cart: formatCart(cart),
+      isAuthenticated: !!appUser,
     };
   } catch (error) {
-    if (error.message === "UNAUTHORIZED") {
-      return { success: false, error: "UNAUTHORIZED", cart: null };
-    }
     console.error("getCart error:", error);
     return { success: false, error: "Failed to get cart", cart: null };
   }
@@ -136,11 +331,13 @@ export async function getCart() {
 
 /**
  * Add product to cart (or increase quantity if already exists)
+ * Works for both logged in users and anonymous
  * Returns updated cart for optimistic update reconciliation
  */
 export async function addToCart(productId, quantity = 1) {
   try {
-    const { appUser } = await requireAppUser();
+    const { appUser } = await getAppUser();
+    const anonymousCartId = appUser ? null : await getOrCreateAnonymousCartId();
 
     // Get product info
     const product = await prisma.product.findUnique({
@@ -152,9 +349,9 @@ export async function addToCart(productId, quantity = 1) {
     }
 
     // Get or create cart
-    const cart = await getOrCreateCart(appUser.id);
+    const cart = await getOrCreateCart(appUser?.id, anonymousCartId);
 
-    // Check if item already exists in cart (use cart.items we already have)
+    // Check if item already exists in cart
     const existingItem = cart.items.find((item) => item.productId === productId);
 
     if (existingItem) {
@@ -170,7 +367,7 @@ export async function addToCart(productId, quantity = 1) {
         },
       });
     } else {
-      // Create new item (prices in minor units)
+      // Create new item
       const lineTotal = quantity * product.priceMinor;
 
       await prisma.orderItem.create({
@@ -186,9 +383,9 @@ export async function addToCart(productId, quantity = 1) {
     }
 
     // Calculate new totals from updated items
-    const updatedCart = await getFreshCart(appUser.id);
+    const updatedCart = await getFreshCart(appUser?.id, anonymousCartId);
     
-    // Update order totals (in minor units)
+    // Update order totals
     await prisma.order.update({
       where: { id: cart.id },
       data: {
@@ -201,9 +398,6 @@ export async function addToCart(productId, quantity = 1) {
 
     return { success: true, cart: updatedCart };
   } catch (error) {
-    if (error.message === "UNAUTHORIZED") {
-      return { success: false, error: "UNAUTHORIZED", cart: null };
-    }
     console.error("addToCart error:", error);
     return { success: false, error: "Failed to add to cart", cart: null };
   }
@@ -211,25 +405,35 @@ export async function addToCart(productId, quantity = 1) {
 
 /**
  * Update item quantity in cart (fire-and-forget style)
- * Just updates the DB, no cart return - client handles optimistic updates
+ * Works for both logged in users and anonymous
  */
 export async function updateCartItem(productId, quantity) {
   try {
-    const { appUser } = await requireAppUser();
+    const { appUser } = await getAppUser();
+    const anonymousCartId = await getAnonymousCartId();
 
     if (quantity <= 0) {
       return removeFromCart(productId);
     }
 
-    // Single query: update item and get unitPrice for calculating line total
-    const item = await prisma.orderItem.findFirst({
-      where: {
-        productId,
-        order: {
-          userId: appUser.id,
-          status: "DRAFT",
-        },
+    // Build where clause for finding item
+    const whereClause = {
+      productId,
+      order: {
+        status: "DRAFT",
       },
+    };
+
+    if (appUser) {
+      whereClause.order.userId = appUser.id;
+    } else if (anonymousCartId) {
+      whereClause.order.anonymousCartId = anonymousCartId;
+    } else {
+      return { success: false, error: "No cart found" };
+    }
+
+    const item = await prisma.orderItem.findFirst({
+      where: whereClause,
     });
 
     if (!item) {
@@ -247,7 +451,7 @@ export async function updateCartItem(productId, quantity) {
       },
     });
 
-    // Update order totals (recalculate from all items, in minor units)
+    // Update order totals
     const allItems = await prisma.orderItem.findMany({
       where: { orderId: item.orderId },
     });
@@ -260,9 +464,6 @@ export async function updateCartItem(productId, quantity) {
 
     return { success: true };
   } catch (error) {
-    if (error.message === "UNAUTHORIZED") {
-      return { success: false, error: "UNAUTHORIZED" };
-    }
     console.error("updateCartItem error:", error);
     return { success: false, error: "Failed to update" };
   }
@@ -270,21 +471,31 @@ export async function updateCartItem(productId, quantity) {
 
 /**
  * Remove item from cart (fire-and-forget style)
- * Just deletes from DB, no cart return - client handles optimistic updates
+ * Works for both logged in users and anonymous
  */
 export async function removeFromCart(productId) {
   try {
-    const { appUser } = await requireAppUser();
+    const { appUser } = await getAppUser();
+    const anonymousCartId = await getAnonymousCartId();
 
-    // Find and delete item in one flow
-    const item = await prisma.orderItem.findFirst({
-      where: {
-        productId,
-        order: {
-          userId: appUser.id,
-          status: "DRAFT",
-        },
+    // Build where clause
+    const whereClause = {
+      productId,
+      order: {
+        status: "DRAFT",
       },
+    };
+
+    if (appUser) {
+      whereClause.order.userId = appUser.id;
+    } else if (anonymousCartId) {
+      whereClause.order.anonymousCartId = anonymousCartId;
+    } else {
+      return { success: false, error: "No cart found" };
+    }
+
+    const item = await prisma.orderItem.findFirst({
+      where: whereClause,
     });
 
     if (!item) {
@@ -295,7 +506,7 @@ export async function removeFromCart(productId) {
       where: { id: item.id },
     });
 
-    // Update order totals (in minor units)
+    // Update order totals
     const remainingItems = await prisma.orderItem.findMany({
       where: { orderId: item.orderId },
     });
@@ -308,9 +519,6 @@ export async function removeFromCart(productId) {
 
     return { success: true };
   } catch (error) {
-    if (error.message === "UNAUTHORIZED") {
-      return { success: false, error: "UNAUTHORIZED" };
-    }
     console.error("removeFromCart error:", error);
     return { success: false, error: "Failed to remove" };
   }
@@ -318,17 +526,35 @@ export async function removeFromCart(productId) {
 
 /**
  * Clear all items from cart
- * Returns updated (empty) cart for optimistic update reconciliation
+ * Works for both logged in users and anonymous
  */
 export async function clearCart() {
   try {
-    const { appUser } = await requireAppUser();
+    const { appUser } = await getAppUser();
+    const anonymousCartId = await getAnonymousCartId();
+
+    const whereClause = appUser
+      ? { userId: appUser.id, status: "DRAFT" }
+      : anonymousCartId
+        ? { anonymousCartId, status: "DRAFT" }
+        : null;
+
+    if (!whereClause) {
+      return { 
+        success: true, 
+        cart: {
+          id: null,
+          subtotal: 0,
+          total: 0,
+          currency: "USD",
+          itemCount: 0,
+          items: [],
+        }
+      };
+    }
 
     const cart = await prisma.order.findFirst({
-      where: {
-        userId: appUser.id,
-        status: "DRAFT",
-      },
+      where: whereClause,
     });
 
     if (!cart) {
@@ -373,9 +599,6 @@ export async function clearCart() {
       }
     };
   } catch (error) {
-    if (error.message === "UNAUTHORIZED") {
-      return { success: false, error: "UNAUTHORIZED", cart: null };
-    }
     console.error("clearCart error:", error);
     return { success: false, error: "Failed to clear cart", cart: null };
   }

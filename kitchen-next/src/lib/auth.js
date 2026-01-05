@@ -4,15 +4,15 @@ import { prisma } from "@/lib/prisma";
 
 /**
  * Get the current Supabase auth user and upsert into Prisma User table.
- * Throws "UNAUTHORIZED" if no user session found.
- * @returns {{ appUser: import("@prisma/client").User, supabaseUser: import("@supabase/supabase-js").User }}
+ * Returns null for appUser if no user session found (no error thrown).
+ * @returns {{ appUser: import("@prisma/client").User | null, supabaseUser: import("@supabase/supabase-js").User | null }}
  */
-export async function requireAppUser() {
+export async function getAppUser() {
   const supabase = await createClient();
   const { data, error } = await supabase.auth.getUser();
 
   if (error || !data.user) {
-    throw new Error("UNAUTHORIZED");
+    return { appUser: null, supabaseUser: null };
   }
 
   const supabaseUser = data.user;
@@ -36,6 +36,21 @@ export async function requireAppUser() {
       name,
     },
   });
+
+  return { appUser, supabaseUser };
+}
+
+/**
+ * Get the current Supabase auth user and upsert into Prisma User table.
+ * Throws "UNAUTHORIZED" if no user session found.
+ * @returns {{ appUser: import("@prisma/client").User, supabaseUser: import("@supabase/supabase-js").User }}
+ */
+export async function requireAppUser() {
+  const { appUser, supabaseUser } = await getAppUser();
+
+  if (!appUser || !supabaseUser) {
+    throw new Error("UNAUTHORIZED");
+  }
 
   return { appUser, supabaseUser };
 }

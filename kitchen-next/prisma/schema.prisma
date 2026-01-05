@@ -75,7 +75,8 @@ model OrderItem {
 
 model Order {
   id              String      @id @default(uuid())
-  userId          String
+  userId          String?     // Optional - null for anonymous carts
+  anonymousCartId String?     @unique // UUID from cookie for anonymous users
   projectId       String?
   status          OrderStatus @default(DRAFT)
   currency        String      @default("USD")
@@ -111,14 +112,16 @@ model Order {
   updatedAt       DateTime    @updatedAt
   activePayment   Payment?    @relation("ActivePayment", fields: [activePaymentId], references: [id])
   project         Project?    @relation(fields: [projectId], references: [id])
-  user            User        @relation(fields: [userId], references: [id])
+  user            User?       @relation(fields: [userId], references: [id])
   items           OrderItem[]
   payments        Payment[]   @relation("OrderPayments")
   installment     InstallmentApplication?  // One-to-one relation with installment application
 
   @@index([userId])
+  @@index([anonymousCartId])
   @@index([projectId])
   @@index([status, expiresAt]) // For efficient expiration queries
+  @@index([status, updatedAt]) // For anonymous cart cleanup
 }
 
 model Payment {
