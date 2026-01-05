@@ -62,8 +62,8 @@ const menuItems = [
   {
     href: "/account/addresses",
     icon: MapPinIcon,
-    label: "Адреси та оплата",
-    description: "Керувати адресами доставки та методами оплати",
+    label: "Збережені адреси",
+    description: "Керувати адресами доставки",
   },
   {
     href: "/account/settings",

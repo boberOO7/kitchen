@@ -1,7 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { requireAppUser } from "@/lib/auth";
+import { requireAppUser, getAppUser } from "@/lib/auth";
 import { expirePendingOrders } from "@/server/orders/expirePendingOrders";
 import { calculateMonthlyPayment, getTestScenarioInfo, INSTALLMENT_PERIODS } from "@/lib/monobank-installments";
 import { getNbuUsdRate, convertUsdToUah, getExchangeRateInfo } from "@/lib/nbu";
@@ -168,6 +168,27 @@ export async function initiateMonobankPayment(deliveryInfo = null) {
       where: { id: order.id },
       data: updateData,
     });
+
+    // Sync checkout data to user profile (silent)
+    if (deliveryInfo) {
+      const profileUpdate = {};
+      if (deliveryInfo.firstName) {
+        profileUpdate.firstName = normalizeNameCase(deliveryInfo.firstName.trim());
+      }
+      if (deliveryInfo.lastName) {
+        profileUpdate.lastName = normalizeNameCase(deliveryInfo.lastName.trim());
+      }
+      if (deliveryInfo.phone) {
+        profileUpdate.phone = deliveryInfo.phone;
+      }
+      
+      if (Object.keys(profileUpdate).length > 0) {
+        await prisma.user.update({
+          where: { id: appUser.id },
+          data: profileUpdate,
+        });
+      }
+    }
 
     // Return orderId for client to call the API endpoint
     // We use API endpoint because we need request headers for origin URL
@@ -710,5 +731,78 @@ export async function getCurrentExchangeRate() {
       error: "Не вдалося отримати курс НБУ. Спробуйте пізніше.",
     };
   }
+}
+
+/**
+ * Get all initial data needed for checkout page in a single request
+ * Combines: profile, saved addresses, exchange rate
+ * This optimizes the checkout page load from 3+ requests to 1
+ */
+export async function getCheckoutInitialData() {
+  // Run all fetches in parallel on the server
+  const [userResult, exchangeRateResult] = await Promise.all([
+    getAppUser(),
+    getExchangeRateInfo().catch(() => null),
+  ]);
+
+  const { appUser, supabaseUser } = userResult;
+
+  // Profile data
+  let profile = null;
+  if (appUser && supabaseUser) {
+    const metadata = supabaseUser.user_metadata || {};
+    const googleIdentity = supabaseUser.identities?.find(
+      (i) => i.provider === "google"
+    )?.identity_data;
+
+    profile = {
+      firstName: appUser.firstName || metadata.given_name || googleIdentity?.given_name || "",
+      lastName: appUser.lastName || metadata.family_name || googleIdentity?.family_name || "",
+      email: appUser.email,
+      phone: appUser.phone || "",
+    };
+  }
+
+  // Saved addresses (only if logged in)
+  let addresses = [];
+  if (appUser) {
+    try {
+      const userAddresses = await prisma.address.findMany({
+        where: { userId: appUser.id },
+        orderBy: [
+          { isDefault: "desc" },
+          { createdAt: "desc" },
+        ],
+      });
+      addresses = userAddresses.map((addr) => ({
+        id: addr.id,
+        label: addr.label,
+        city: addr.city,
+        address: addr.address,
+        deliveryMethod: addr.deliveryMethod,
+        isDefault: addr.isDefault,
+      }));
+    } catch (e) {
+      console.error("Failed to load addresses:", e);
+    }
+  }
+
+  // Exchange rate
+  let exchangeRate = null;
+  if (exchangeRateResult) {
+    exchangeRate = {
+      rate: exchangeRateResult.rate,
+      date: exchangeRateResult.date,
+      dateFormatted: exchangeRateResult.dateFormatted,
+    };
+  }
+
+  return {
+    success: true,
+    profile,
+    addresses,
+    exchangeRate,
+    isLoggedIn: !!appUser,
+  };
 }
 

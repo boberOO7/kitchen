@@ -24,6 +24,24 @@ model User {
   authUserId String    @unique
   orders     Order[]
   projects   Project[]
+  addresses  Address[]
+}
+
+model Address {
+  id             String   @id @default(uuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  label          String?  // "Дім", "Робота", etc.
+  city           String
+  address        String   // Warehouse number or street address
+  deliveryMethod String   // "nova_poshta_warehouse", "nova_poshta_courier", "ukrposhta"
+  isDefault      Boolean  @default(false)
+  
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  
+  @@index([userId])
 }
 
 model Project {

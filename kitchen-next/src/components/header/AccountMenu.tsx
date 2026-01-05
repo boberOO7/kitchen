@@ -425,7 +425,7 @@ export default function AccountMenu() {
               <MenuItem
                 href="/account/addresses"
                 icon={<MapPinIcon className="h-5 w-5" />}
-                label="Адреси та оплата"
+                label="Збережені адреси"
                 onClose={handleClose}
               />
               <MenuItem

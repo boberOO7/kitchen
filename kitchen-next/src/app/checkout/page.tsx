@@ -7,8 +7,8 @@ import { useRouter } from "next/navigation";
 import { useCart } from "@/contexts/CartContext";
 import { useAuth } from "@/hooks/useAuth";
 import { getProductImageUrl } from "@/lib/storage";
-import { initiateMonobankPayment, getPendingPaymentOrder, getInstallmentOptions, getCurrentExchangeRate } from "@/app/actions/checkout";
-import { getProfileForCheckout } from "@/app/actions/profile";
+import { initiateMonobankPayment, getPendingPaymentOrder, getInstallmentOptions, getCheckoutInitialData } from "@/app/actions/checkout";
+import { createAddress, type AddressData } from "@/app/actions/addresses";
 import { formatPriceFromMinor } from "@/lib/currency";
 import { formatUahFromMinor, convertUsdToUah } from "@/lib/nbu";
 import { PhoneInput } from "@/components/ui/PhoneInput";
@@ -233,21 +233,18 @@ export default function CheckoutPage() {
   // Exchange rate state (for UAH display)
   const [exchangeRate, setExchangeRate] = useState<number | null>(null);
 
-  // Load form data: DB profile first (source of truth), then sessionStorage for session edits
-  useEffect(() => {
-    async function loadFormData() {
-      // First, fetch profile data from DB (source of truth for user data)
-      let profileData: { firstName?: string; lastName?: string; email?: string; phone?: string } = {};
-      try {
-        const result = await getProfileForCheckout();
-        if (result.success && result.data) {
-          profileData = result.data;
-        }
-      } catch (e) {
-        console.error("Failed to load profile data:", e);
-      }
+  // Saved addresses state
+  const [savedAddresses, setSavedAddresses] = useState<AddressData[]>([]);
+  const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
+  const [saveNewAddress, setSaveNewAddress] = useState(false);
 
-      // Then, load from sessionStorage (for preserving edits during checkout session)
+  // Load all initial checkout data in a single request (optimized)
+  useEffect(() => {
+    async function loadInitialData() {
+      // Fetch all data in one server request
+      const result = await getCheckoutInitialData();
+      
+      // Load from sessionStorage (for preserving edits during checkout session)
       let sessionDraft: Partial<CheckoutFormData> = {};
       try {
         const savedData = sessionStorage.getItem(CHECKOUT_SESSION_KEY);
@@ -258,27 +255,53 @@ export default function CheckoutPage() {
         console.error("Failed to load session draft:", e);
       }
 
+      // Set exchange rate
+      if (result.exchangeRate) {
+        setExchangeRate(result.exchangeRate.rate);
+      }
+
+      // Set saved addresses
+      if (result.addresses && result.addresses.length > 0) {
+        setSavedAddresses(result.addresses as AddressData[]);
+      }
+
+      // Find default address
+      const defaultAddress = result.addresses?.find((a: any) => a.isDefault) || result.addresses?.[0] || null;
+
       // Merge priority:
       // - For name/email/phone: DB profile is source of truth (sessionStorage only if DB is empty)
-      // - For city/address/delivery/comment: sessionStorage (session-specific data)
+      // - For city/address/delivery/comment: saved address > sessionStorage
+      const addressData = defaultAddress ? {
+        city: defaultAddress.city,
+        address: defaultAddress.address,
+        deliveryMethod: defaultAddress.deliveryMethod,
+      } : null;
+
+      const profileData = result.profile as { firstName?: string; lastName?: string; email?: string; phone?: string } | null;
+
       setFormData((prev) => ({
         ...prev,
         // User profile fields: DB has priority
-        firstName: profileData.firstName || sessionDraft.firstName || prev.firstName,
-        lastName: profileData.lastName || sessionDraft.lastName || prev.lastName,
-        email: profileData.email || sessionDraft.email || prev.email,
-        phone: profileData.phone || sessionDraft.phone || prev.phone,
-        // Delivery fields: sessionStorage has priority (session-specific)
-        city: sessionDraft.city || prev.city,
-        address: sessionDraft.address || prev.address,
-        deliveryMethod: sessionDraft.deliveryMethod || prev.deliveryMethod,
+        firstName: profileData?.firstName || sessionDraft.firstName || prev.firstName,
+        lastName: profileData?.lastName || sessionDraft.lastName || prev.lastName,
+        email: profileData?.email || sessionDraft.email || prev.email,
+        phone: profileData?.phone || sessionDraft.phone || prev.phone,
+        // Delivery fields: saved address > sessionStorage > prev
+        city: addressData?.city || sessionDraft.city || prev.city,
+        address: addressData?.address || sessionDraft.address || prev.address,
+        deliveryMethod: addressData?.deliveryMethod || sessionDraft.deliveryMethod || prev.deliveryMethod,
         comment: sessionDraft.comment || prev.comment,
       }));
+
+      // Set selected address if we have one
+      if (defaultAddress) {
+        setSelectedAddressId(defaultAddress.id);
+      }
 
       setIsFormLoaded(true);
     }
 
-    loadFormData();
+    loadInitialData();
   }, []);
 
   // Save form data to sessionStorage when it changes (for preserving edits during checkout)
@@ -364,22 +387,6 @@ export default function CheckoutPage() {
 
     fetchInstallmentOptions();
   }, [cart]);
-
-  // Fetch exchange rate for UAH display
-  useEffect(() => {
-    async function fetchExchangeRate() {
-      try {
-        const result = await getCurrentExchangeRate();
-        if (result.success && result.rate) {
-          setExchangeRate(result.rate);
-        }
-      } catch (e) {
-        console.error("Failed to fetch exchange rate:", e);
-      }
-    }
-
-    fetchExchangeRate();
-  }, []);
 
   // Cleanup polling on unmount
   useEffect(() => {
@@ -535,6 +542,20 @@ export default function CheckoutPage() {
         setSubmitError(result.error || "Помилка оформлення");
         setIsSubmitting(false);
         return;
+      }
+
+      // Save new address if checkbox is checked
+      if (saveNewAddress && selectedAddressId === null && formData.city && formData.address) {
+        try {
+          await createAddress({
+            city: formData.city,
+            address: formData.address,
+            deliveryMethod: formData.deliveryMethod,
+          });
+        } catch (e) {
+          console.error("Failed to save address:", e);
+          // Don't block the payment flow if address save fails
+        }
       }
 
       // Branch based on payment method
@@ -778,6 +799,103 @@ export default function CheckoutPage() {
                   Доставка
                 </h2>
 
+                {/* Saved Addresses Selector */}
+                {savedAddresses.length > 0 && (
+                  <div className="mb-6">
+                    <label className="block text-sm font-medium text-[var(--sky-fg)] mb-2">
+                      Збережені адреси
+                    </label>
+                    <div className="space-y-2">
+                      {savedAddresses.map((addr) => (
+                        <label
+                          key={addr.id}
+                          className={`flex items-center gap-3 p-3 border cursor-pointer transition ${
+                            selectedAddressId === addr.id
+                              ? "border-[var(--sky-accent)] bg-[var(--sky-accent)]/5"
+                              : "border-[var(--sky-border)] hover:border-[var(--sky-fg)]/30"
+                          }`}
+                          style={{ borderRadius: 4 }}
+                        >
+                          <input
+                            type="radio"
+                            name="savedAddress"
+                            value={addr.id}
+                            checked={selectedAddressId === addr.id}
+                            onChange={() => {
+                              setSelectedAddressId(addr.id);
+                              setFormData((prev) => ({
+                                ...prev,
+                                city: addr.city,
+                                address: addr.address,
+                                deliveryMethod: addr.deliveryMethod,
+                              }));
+                              setSaveNewAddress(false);
+                            }}
+                            className="sr-only"
+                          />
+                          <div className={`flex h-4 w-4 items-center justify-center rounded-full border-2 flex-shrink-0 ${
+                            selectedAddressId === addr.id
+                              ? "border-[var(--sky-accent)] bg-[var(--sky-accent)]"
+                              : "border-[var(--sky-border)]"
+                          }`}>
+                            {selectedAddressId === addr.id && (
+                              <div className="h-1.5 w-1.5 rounded-full bg-white" />
+                            )}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              {addr.label && <span className="font-medium text-sm text-[var(--sky-fg)]">{addr.label}</span>}
+                              {addr.isDefault && (
+                                <span className="text-xs text-[var(--sky-accent)] bg-[var(--sky-accent)]/10 px-1.5 py-0.5" style={{ borderRadius: 2 }}>
+                                  Основна
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-sm text-[var(--sky-fg-muted)] truncate">
+                              {addr.city}, {addr.address}
+                            </p>
+                          </div>
+                        </label>
+                      ))}
+                      {/* Option to enter new address */}
+                      <label
+                        className={`flex items-center gap-3 p-3 border cursor-pointer transition ${
+                          selectedAddressId === null
+                            ? "border-[var(--sky-accent)] bg-[var(--sky-accent)]/5"
+                            : "border-[var(--sky-border)] hover:border-[var(--sky-fg)]/30"
+                        }`}
+                        style={{ borderRadius: 4 }}
+                      >
+                        <input
+                          type="radio"
+                          name="savedAddress"
+                          value=""
+                          checked={selectedAddressId === null}
+                          onChange={() => {
+                            setSelectedAddressId(null);
+                            setFormData((prev) => ({
+                              ...prev,
+                              city: "",
+                              address: "",
+                            }));
+                          }}
+                          className="sr-only"
+                        />
+                        <div className={`flex h-4 w-4 items-center justify-center rounded-full border-2 flex-shrink-0 ${
+                          selectedAddressId === null
+                            ? "border-[var(--sky-accent)] bg-[var(--sky-accent)]"
+                            : "border-[var(--sky-border)]"
+                        }`}>
+                          {selectedAddressId === null && (
+                            <div className="h-1.5 w-1.5 rounded-full bg-white" />
+                          )}
+                        </div>
+                        <span className="text-sm text-[var(--sky-fg)]">Нова адреса</span>
+                      </label>
+                    </div>
+                  </div>
+                )}
+
                 {/* Delivery Methods */}
                 <div className="space-y-3 mb-6">
                   {deliveryMethods.map((method) => (
@@ -844,6 +962,20 @@ export default function CheckoutPage() {
                     autoComplete="section-shipping street-address"
                   />
                 </div>
+
+                {/* Save Address Checkbox (only for new addresses when user is logged in) */}
+                {user && selectedAddressId === null && formData.city && formData.address && (
+                  <label className="flex items-center gap-2 mt-4 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={saveNewAddress}
+                      onChange={(e) => setSaveNewAddress(e.target.checked)}
+                      className="h-4 w-4 border-[var(--sky-border)] text-[var(--sky-accent)] focus:ring-[var(--sky-accent)]"
+                      style={{ borderRadius: 2 }}
+                    />
+                    <span className="text-sm text-[var(--sky-fg)]">Зберегти цю адресу</span>
+                  </label>
+                )}
 
                 {/* Comment */}
                 <div className="mt-4">
