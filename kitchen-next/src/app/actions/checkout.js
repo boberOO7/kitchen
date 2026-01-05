@@ -7,6 +7,23 @@ import { calculateMonthlyPayment, getTestScenarioInfo, INSTALLMENT_PERIODS } fro
 import { getNbuUsdRate, convertUsdToUah, getExchangeRateInfo } from "@/lib/nbu";
 
 /**
+ * Normalize name to title case (handles compound names like "Анна-Марія")
+ */
+function normalizeNameCase(name) {
+  if (!name) return name;
+  return name
+    .toLowerCase()
+    .split(/(-|'|ʼ|')/)
+    .map((part) => {
+      if (part === '-' || part === "'" || part === 'ʼ' || part === "'") {
+        return part;
+      }
+      return part.charAt(0).toUpperCase() + part.slice(1);
+    })
+    .join('');
+}
+
+/**
  * Check if user has any PENDING_PAYMENT orders (unpaid orders)
  * Returns the most recent one and total count of pending orders
  */
@@ -137,7 +154,7 @@ export async function initiateMonobankPayment(deliveryInfo = null) {
       Object.assign(updateData, {
         deliveryMethod: deliveryInfo.deliveryMethod || null,
         recipientName: deliveryInfo.firstName && deliveryInfo.lastName 
-          ? `${deliveryInfo.firstName} ${deliveryInfo.lastName}` 
+          ? `${normalizeNameCase(deliveryInfo.firstName.trim())} ${normalizeNameCase(deliveryInfo.lastName.trim())}` 
           : null,
         recipientPhone: deliveryInfo.phone || null,
         recipientEmail: deliveryInfo.email || null,

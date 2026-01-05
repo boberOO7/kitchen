@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type { AccountUser } from "@/app/actions/account";
-import { createClient } from "@/lib/supabase/client";
-import { useRouter } from "next/navigation";
+import { getUserProfile, updateUserProfile, type UserProfile } from "@/app/actions/profile";
+import { PhoneInput } from "@/components/ui/PhoneInput";
+import { NameInput, isValidUkrainianName } from "@/components/ui/NameInput";
 
 function ArrowLeftIcon({ className }: { className?: string }) {
   return (
@@ -38,14 +39,32 @@ function TrashIcon({ className }: { className?: string }) {
   );
 }
 
+function CheckIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+    </svg>
+  );
+}
+
+function SpinnerIcon({ className }: { className?: string }) {
+  return (
+    <svg className={`animate-spin ${className || ""}`} viewBox="0 0 24 24" fill="none">
+      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+    </svg>
+  );
+}
+
 interface ToggleProps {
   enabled: boolean;
   onChange: (enabled: boolean) => void;
   label: string;
   description?: string;
+  disabled?: boolean;
 }
 
-function Toggle({ enabled, onChange, label, description }: ToggleProps) {
+function Toggle({ enabled, onChange, label, description, disabled }: ToggleProps) {
   return (
     <div className="flex items-start justify-between gap-4 py-4">
       <div>
@@ -58,8 +77,9 @@ function Toggle({ enabled, onChange, label, description }: ToggleProps) {
         type="button"
         role="switch"
         aria-checked={enabled}
-        onClick={() => onChange(!enabled)}
-        className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer items-center border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sky-accent)] ${
+        onClick={() => !disabled && onChange(!enabled)}
+        disabled={disabled}
+        className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer items-center border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--sky-accent)] disabled:opacity-50 disabled:cursor-not-allowed ${
           enabled ? "bg-[var(--sky-accent)]" : "bg-[var(--sky-border)]"
         }`}
         style={{ borderRadius: 999 }}
@@ -80,19 +100,120 @@ interface SettingsContentProps {
 }
 
 export default function SettingsContent({ user }: SettingsContentProps) {
-  const router = useRouter();
-  const supabase = createClient();
+  // Profile data state
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [phone, setPhone] = useState("");
   
-  // TODO: Replace with actual settings from API
+  // Notification preferences
   const [emailNotifications, setEmailNotifications] = useState(true);
   const [orderUpdates, setOrderUpdates] = useState(true);
   const [marketingEmails, setMarketingEmails] = useState(false);
+  
+  // UI state
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  
+  // Track if form has unsaved changes
+  const [hasChanges, setHasChanges] = useState(false);
+  const [originalData, setOriginalData] = useState<UserProfile | null>(null);
 
-  const handleSignOut = async () => {
-    await supabase.auth.signOut();
-    router.push("/");
-    router.refresh();
+  // Load profile data on mount
+  useEffect(() => {
+    async function loadProfile() {
+      setIsLoading(true);
+      try {
+        const result = await getUserProfile();
+        if (result.success && result.profile) {
+          const profile = result.profile;
+          setFirstName(profile.firstName || "");
+          setLastName(profile.lastName || "");
+          setPhone(profile.phone || "");
+          setEmailNotifications(profile.notificationEmailEnabled);
+          setOrderUpdates(profile.notificationOrdersEnabled);
+          setMarketingEmails(profile.marketingEnabled);
+          setOriginalData(profile);
+        }
+      } catch (e) {
+        console.error("Failed to load profile:", e);
+        setError("Не вдалося завантажити профіль");
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    loadProfile();
+  }, []);
+
+  // Track changes
+  useEffect(() => {
+    if (!originalData) return;
+    
+    const changed =
+      firstName !== (originalData.firstName || "") ||
+      lastName !== (originalData.lastName || "") ||
+      phone !== (originalData.phone || "") ||
+      emailNotifications !== originalData.notificationEmailEnabled ||
+      orderUpdates !== originalData.notificationOrdersEnabled ||
+      marketingEmails !== originalData.marketingEnabled;
+    
+    setHasChanges(changed);
+    setSaveSuccess(false); // Reset success message when form changes
+  }, [firstName, lastName, phone, emailNotifications, orderUpdates, marketingEmails, originalData]);
+
+  const handleSave = async () => {
+    // Validate names before saving
+    if (firstName && !isValidUkrainianName(firstName)) {
+      setError("Ім'я має містити тільки українські літери");
+      return;
+    }
+    if (lastName && !isValidUkrainianName(lastName)) {
+      setError("Прізвище має містити тільки українські літери");
+      return;
+    }
+    
+    setIsSaving(true);
+    setError(null);
+    setSaveSuccess(false);
+    
+    try {
+      const result = await updateUserProfile({
+        firstName,
+        lastName,
+        phone,
+        notificationEmailEnabled: emailNotifications,
+        notificationOrdersEnabled: orderUpdates,
+        marketingEnabled: marketingEmails,
+      });
+      
+      if (result.success && result.profile) {
+        setOriginalData(result.profile);
+        setSaveSuccess(true);
+        setHasChanges(false);
+        
+        // Auto-hide success message after 3 seconds
+        setTimeout(() => setSaveSuccess(false), 3000);
+      } else {
+        setError(result.error || "Не вдалося зберегти зміни");
+      }
+    } catch (e) {
+      console.error("Failed to save profile:", e);
+      setError("Сталася помилка. Спробуйте ще раз.");
+    } finally {
+      setIsSaving(false);
+    }
   };
+
+  if (isLoading) {
+    return (
+      <div className="mx-auto max-w-[800px] px-4 py-12 sm:px-6">
+        <div className="flex items-center justify-center py-20">
+          <SpinnerIcon className="h-8 w-8 text-[var(--sky-accent)]" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-[800px] px-4 py-12 sm:px-6">
@@ -115,6 +236,21 @@ export default function SettingsContent({ user }: SettingsContentProps) {
         </p>
       </div>
 
+      {/* Error message */}
+      {error && (
+        <div className="mb-6 p-4 bg-red-500/10 border border-red-500/30 text-sm text-red-500" style={{ borderRadius: 4 }}>
+          {error}
+        </div>
+      )}
+
+      {/* Success message */}
+      {saveSuccess && (
+        <div className="mb-6 p-4 bg-green-500/10 border border-green-500/30 text-sm text-green-600 flex items-center gap-2" style={{ borderRadius: 4 }}>
+          <CheckIcon className="h-4 w-4" />
+          Зміни збережено
+        </div>
+      )}
+
       {/* Personal Info Section */}
       <section className="mb-10">
         <div className="flex items-center gap-2 mb-4">
@@ -126,19 +262,22 @@ export default function SettingsContent({ user }: SettingsContentProps) {
 
         <div className="border border-[var(--sky-border)] bg-[var(--sky-surface)] p-5" style={{ borderRadius: 4 }}>
           <div className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <label className="block text-sm font-medium text-[var(--sky-fg-muted)] mb-1.5">
-                Ім'я
-              </label>
-              <input
-                type="text"
-                defaultValue={user.name || ""}
-                placeholder="Введіть ваше ім'я"
-                className="w-full border border-[var(--sky-border)] bg-[var(--sky-bg)] px-3 py-2 text-sm text-[var(--sky-fg)] placeholder-[var(--sky-fg-muted)] focus:outline-none focus:border-[var(--sky-accent)]"
-                style={{ borderRadius: 2 }}
-                // TODO: Implement save functionality
-              />
-            </div>
+            <NameInput
+              label="Ім'я"
+              name="firstName"
+              value={firstName}
+              onChange={setFirstName}
+              placeholder="Введіть ваше ім'я"
+              disabled={isSaving}
+            />
+            <NameInput
+              label="Прізвище"
+              name="lastName"
+              value={lastName}
+              onChange={setLastName}
+              placeholder="Введіть ваше прізвище"
+              disabled={isSaving}
+            />
             <div>
               <label className="block text-sm font-medium text-[var(--sky-fg-muted)] mb-1.5">
                 Email
@@ -154,27 +293,31 @@ export default function SettingsContent({ user }: SettingsContentProps) {
                 Email не можна змінити
               </p>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-[var(--sky-fg-muted)] mb-1.5">
-                Телефон
-              </label>
-              <input
-                type="tel"
-                placeholder="+380"
-                className="w-full border border-[var(--sky-border)] bg-[var(--sky-bg)] px-3 py-2 text-sm text-[var(--sky-fg)] placeholder-[var(--sky-fg-muted)] focus:outline-none focus:border-[var(--sky-accent)]"
-                style={{ borderRadius: 2 }}
-                // TODO: Implement save functionality
-              />
-            </div>
+            <PhoneInput
+              label="Телефон"
+              name="phone"
+              value={phone}
+              onChange={setPhone}
+              disabled={isSaving}
+              hint="Використовується для зв'язку щодо замовлень"
+            />
           </div>
 
           <button
             type="button"
-            className="mt-5 inline-flex items-center justify-center bg-[var(--sky-accent)] px-4 py-2 text-sm font-medium text-[var(--sky-accent-fg)] transition hover:opacity-90"
+            onClick={handleSave}
+            disabled={isSaving || !hasChanges}
+            className="mt-5 inline-flex items-center justify-center gap-2 bg-[var(--sky-accent)] px-4 py-2 text-sm font-medium text-[var(--sky-accent-fg)] transition hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
             style={{ borderRadius: 2 }}
-            // TODO: Implement save functionality
           >
-            Зберегти зміни
+            {isSaving ? (
+              <>
+                <SpinnerIcon className="h-4 w-4" />
+                Збереження...
+              </>
+            ) : (
+              "Зберегти зміни"
+            )}
           </button>
         </div>
       </section>
@@ -194,20 +337,29 @@ export default function SettingsContent({ user }: SettingsContentProps) {
             onChange={setEmailNotifications}
             label="Email-сповіщення"
             description="Отримувати загальні сповіщення на email"
+            disabled={isSaving}
           />
           <Toggle
             enabled={orderUpdates}
             onChange={setOrderUpdates}
             label="Оновлення замовлень"
             description="Сповіщення про статус ваших замовлень"
+            disabled={isSaving}
           />
           <Toggle
             enabled={marketingEmails}
             onChange={setMarketingEmails}
             label="Маркетингові листи"
             description="Отримувати інформацію про акції та новинки"
+            disabled={isSaving}
           />
         </div>
+        
+        {hasChanges && (
+          <p className="mt-2 text-xs text-[var(--sky-fg-muted)]">
+            * Натисніть "Зберегти зміни" щоб застосувати налаштування
+          </p>
+        )}
       </section>
 
       {/* Danger Zone */}
@@ -240,4 +392,3 @@ export default function SettingsContent({ user }: SettingsContentProps) {
     </div>
   );
 }
-
