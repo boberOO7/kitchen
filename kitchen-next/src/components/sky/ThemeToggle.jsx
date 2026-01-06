@@ -6,11 +6,18 @@ const THEME_KEY = "sky-theme";
 const PALETTE_KEY = "sky-palette";
 const VIDEO_KEY = "sky-video";
 const MAGNET_KEY = "sky-magnet";
+const CURSOR_KEY = "sky-cursor-mode";
 
 const MAGNET_MODES = [
   { id: "free", label: "Free" },
   { id: "field", label: "Field" },
   { id: "off", label: "Off" },
+];
+
+const CURSOR_MODES = [
+  { id: "blob", label: "Blob" },
+  { id: "trail", label: "Trail" },
+  { id: "webgl", label: "Fluid" },
 ];
 
 const PALETTES = [
@@ -31,6 +38,7 @@ export default function ThemeToggle() {
   const [palette, setPalette] = useState(() => getInitial(PALETTE_KEY, "mono"));
   const [videoEnabled, setVideoEnabled] = useState(true);
   const [magnetMode, setMagnetMode] = useState("free");
+  const [cursorMode, setCursorMode] = useState("blob");
   const [showPalettes, setShowPalettes] = useState(false);
 
   useEffect(() => {
@@ -40,10 +48,12 @@ export default function ThemeToggle() {
       const storedPalette = localStorage.getItem(PALETTE_KEY);
       const storedVideo = localStorage.getItem(VIDEO_KEY);
       const storedMagnet = localStorage.getItem(MAGNET_KEY);
+      const storedCursor = localStorage.getItem(CURSOR_KEY);
       if (storedTheme) setTheme(storedTheme);
       if (storedPalette) setPalette(storedPalette);
       if (storedVideo !== null) setVideoEnabled(storedVideo === "true");
       if (storedMagnet) setMagnetMode(storedMagnet);
+      if (storedCursor) setCursorMode(storedCursor);
     } catch {}
   }, []);
 
@@ -73,8 +83,15 @@ export default function ThemeToggle() {
     window.dispatchEvent(new CustomEvent("sky-magnet-change", { detail: magnetMode }));
   }, [magnetMode]);
 
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    try { localStorage.setItem(CURSOR_KEY, cursorMode); } catch {}
+    window.dispatchEvent(new CustomEvent("sky-cursor-change", { detail: cursorMode }));
+  }, [cursorMode]);
+
   const currentPalette = PALETTES.find(p => p.id === palette) || PALETTES[0];
   const currentMagnet = MAGNET_MODES.find((m) => m.id === magnetMode) || MAGNET_MODES[0];
+  const currentCursor = CURSOR_MODES.find((c) => c.id === cursorMode) || CURSOR_MODES[0];
 
   // Avoid hydration mismatch: server can't know localStorage-based palette/theme.
   // Render a fixed-size placeholder until mounted so SSR and first client render match.
@@ -91,6 +108,25 @@ export default function ThemeToggle() {
 
   return (
     <div className="relative flex items-center gap-2">
+      {/* Cursor mode toggle */}
+      <button
+        type="button"
+        onClick={() => {
+          const idx = CURSOR_MODES.findIndex((c) => c.id === cursorMode);
+          const next = CURSOR_MODES[(idx + 1) % CURSOR_MODES.length]?.id || "blob";
+          setCursorMode(next);
+        }}
+        className="flex h-8 items-center gap-2 border border-[var(--sky-header-border)] bg-[var(--sky-header-surface)] px-2.5 text-[var(--sky-header-fg)] transition hover:bg-[var(--sky-header-surface-hover)]"
+        style={{ borderRadius: 2 }}
+        aria-label="Cursor style"
+        title={`Cursor: ${currentCursor.label}`}
+      >
+        <svg className="h-3.5 w-3.5 opacity-80" fill="currentColor" viewBox="0 0 24 24">
+          <path d="M13.64 21.97C13.14 22.21 12.54 22 12.31 21.5L10.13 16.76L7.62 18.78C7.45 18.92 7.24 19 7 19C6.45 19 6 18.55 6 18V3C6 2.45 6.45 2 7 2C7.24 2 7.47 2.09 7.64 2.23L7.65 2.22L19.14 11.86C19.57 12.22 19.62 12.85 19.27 13.27C19.1 13.47 18.86 13.59 18.62 13.62L14.94 14.04L17.15 18.81C17.39 19.31 17.18 19.91 16.68 20.15L13.64 21.97Z"/>
+        </svg>
+        <span className="hidden text-xs sm:inline">{currentCursor.label}</span>
+      </button>
+
       {/* Magnetism mode toggle */}
       <button
         type="button"
