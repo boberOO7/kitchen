@@ -5,9 +5,12 @@ import { useEffect, useRef, useState } from "react";
 // Metaball Fluid Cursor
 // Uses SVG filter "goo effect" to make particles merge like liquid droplets
 
+const CURSOR_CONTRAST_KEY = "sky-cursor-contrast";
+
 export default function WebGLCursor() {
   const containerRef = useRef(null);
   const [isClient, setIsClient] = useState(false);
+  const [contrastMode, setContrastMode] = useState(false); // false = blend mode, true = shadow
   const particlesRef = useRef([]);
   const posRef = useRef({ x: -100, y: -100, px: -100, py: -100 });
   const rafRef = useRef(null);
@@ -16,6 +19,19 @@ export default function WebGLCursor() {
 
   useEffect(() => {
     setIsClient(true);
+    try {
+      const storedContrast = localStorage.getItem(CURSOR_CONTRAST_KEY);
+      if (storedContrast !== null) setContrastMode(storedContrast === "true");
+    } catch {}
+
+    const onContrastChange = (e) => {
+      setContrastMode(e?.detail ?? false);
+    };
+    window.addEventListener("sky-cursor-contrast-change", onContrastChange);
+
+    return () => {
+      window.removeEventListener("sky-cursor-contrast-change", onContrastChange);
+    };
   }, []);
 
   useEffect(() => {
@@ -166,12 +182,14 @@ export default function WebGLCursor() {
         height: "100vh",
         pointerEvents: "none",
         zIndex: 99999,
-        mixBlendMode: "difference",
+        // Use blend mode only when contrast mode is OFF
+        mixBlendMode: contrastMode ? 'normal' : 'difference',
       }}
     >
       {/* SVG Filter for metaball/goo effect */}
       <svg style={{ position: "absolute", width: 0, height: 0 }}>
         <defs>
+          {/* Standard goo filter - used when contrast mode is OFF (with blend mode) */}
           <filter id="goo-filter">
             {/* Blur to make edges soft and overlapping */}
             <feGaussianBlur in="SourceGraphic" stdDeviation="8" result="blur" />
@@ -188,17 +206,33 @@ export default function WebGLCursor() {
             {/* Composite original on top for sharper edges */}
             <feComposite in="SourceGraphic" in2="goo" operator="atop" />
           </filter>
+          {/* Combined goo + shadow filter - used when contrast mode is ON */}
+          <filter id="goo-filter-shadow">
+            <feGaussianBlur in="SourceGraphic" stdDeviation="8" result="blur" />
+            <feColorMatrix
+              in="blur"
+              mode="matrix"
+              values="1 0 0 0 0
+                      0 1 0 0 0
+                      0 0 1 0 0
+                      0 0 0 25 -10"
+              result="goo"
+            />
+            <feComposite in="SourceGraphic" in2="goo" operator="atop" result="gooResult" />
+            {/* Add subtle shadow for contrast on any background */}
+            <feDropShadow dx="0" dy="0" stdDeviation="3" floodColor="var(--sky-bg, #fafafa)" floodOpacity="0.6" />
+          </filter>
         </defs>
       </svg>
 
-      {/* Canvas with goo filter applied */}
+      {/* Canvas with appropriate filter based on contrast mode */}
       <canvas
         ref={canvasRef}
         style={{
           position: "absolute",
           top: 0,
           left: 0,
-          filter: "url(#goo-filter)",
+          filter: contrastMode ? "url(#goo-filter-shadow)" : "url(#goo-filter)",
         }}
       />
     </div>

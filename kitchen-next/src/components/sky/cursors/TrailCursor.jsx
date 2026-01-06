@@ -118,13 +118,17 @@ function generateTrailPath(points) {
   return d;
 }
 
+const CURSOR_CONTRAST_KEY = "sky-cursor-contrast";
+
 export default function TrailCursor() {
   const containerRef = useRef(null);
   const trailRef = useRef(null);
   const headRef = useRef(null);
   const glowRef = useRef(null);
+  const outlineRef = useRef(null);
   const [isClient, setIsClient] = useState(false);
   const [isMagnetic, setIsMagnetic] = useState(false);
+  const [contrastMode, setContrastMode] = useState(false); // false = blend mode, true = outline
 
   const MAGNET_KEY = "sky-magnet";
 
@@ -145,7 +149,7 @@ export default function TrailCursor() {
   const lastFrameTime = useRef(performance.now());
   const time = useRef(0);
 
-  const TRAIL_DURATION = 1000;
+  const TRAIL_DURATION = 300;
   const TRAIL_SAMPLE_INTERVAL = 12;
   const HEAD_RADIUS = 12;
   const MAX_TRAIL_WIDTH = 22;
@@ -165,6 +169,8 @@ export default function TrailCursor() {
     try {
       const stored = localStorage.getItem(MAGNET_KEY);
       if (stored) magnetModeRef.current = stored;
+      const storedContrast = localStorage.getItem(CURSOR_CONTRAST_KEY);
+      if (storedContrast !== null) setContrastMode(storedContrast === "true");
     } catch {}
 
     const onMagnetMode = (e) => {
@@ -175,6 +181,11 @@ export default function TrailCursor() {
       strengthSmoothed.current = 0;
     };
     window.addEventListener("sky-magnet-change", onMagnetMode);
+
+    const onContrastChange = (e) => {
+      setContrastMode(e?.detail ?? false);
+    };
+    window.addEventListener("sky-cursor-contrast-change", onContrastChange);
 
     const initX = window.innerWidth / 2;
     const initY = window.innerHeight / 2;
@@ -422,6 +433,11 @@ export default function TrailCursor() {
         glowRef.current.setAttribute("cy", cursorPos.current.y);
         glowRef.current.setAttribute("r", headRadius + 4);
       }
+      if (outlineRef.current) {
+        outlineRef.current.setAttribute("cx", cursorPos.current.x);
+        outlineRef.current.setAttribute("cy", cursorPos.current.y);
+        outlineRef.current.setAttribute("r", headRadius + 2);
+      }
 
       raf.current = requestAnimationFrame(animate);
     };
@@ -434,6 +450,7 @@ export default function TrailCursor() {
       window.removeEventListener("resize", refreshMagnetElements);
       window.removeEventListener("scroll", refreshMagnetElements);
       window.removeEventListener("sky-magnet-change", onMagnetMode);
+      window.removeEventListener("sky-cursor-contrast-change", onContrastChange);
       if (raf.current) cancelAnimationFrame(raf.current);
     };
   }, []);
@@ -452,8 +469,9 @@ export default function TrailCursor() {
         height: "100vh",
         pointerEvents: "none",
         zIndex: 99999,
-        mixBlendMode: "difference",
         overflow: "visible",
+        // Use blend mode only when contrast mode is OFF
+        mixBlendMode: contrastMode ? 'normal' : 'difference',
       }}
     >
       <defs>
@@ -466,12 +484,34 @@ export default function TrailCursor() {
         </filter>
       </defs>
 
-      <path ref={trailRef} d="" fill="var(--sky-accent, #b08d57)" opacity={0.5} />
+      {/* Trail - with contrast stroke only when contrast mode is ON */}
+      <path 
+        ref={trailRef} 
+        d="" 
+        fill="var(--sky-accent)" 
+        opacity={0.5} 
+        stroke={contrastMode ? "var(--sky-bg)" : "none"} 
+        strokeWidth={contrastMode ? "2" : "0"} 
+        strokeOpacity="0.3" 
+      />
+
+      {/* Contrast outline for head - only visible when contrast mode is ON */}
+      {contrastMode && (
+        <circle
+          ref={outlineRef}
+          cx={0} cy={0} r={HEAD_RADIUS + 2}
+          fill="none"
+          stroke="var(--sky-bg)"
+          strokeWidth="2"
+          opacity={0.4}
+          filter="url(#trail-cursor-glow)"
+        />
+      )}
 
       <circle
         ref={glowRef}
         cx={0} cy={0} r={HEAD_RADIUS + 4}
-        fill="var(--sky-accent, #b08d57)"
+        fill="var(--sky-accent)"
         opacity={isMagnetic ? 0.5 : 0.25}
         filter="url(#trail-cursor-glow)"
       />
@@ -479,7 +519,7 @@ export default function TrailCursor() {
       <circle
         ref={headRef}
         cx={0} cy={0} r={HEAD_RADIUS}
-        fill="var(--sky-accent, #b08d57)"
+        fill="var(--sky-accent)"
         opacity={isMagnetic ? 1 : 0.85}
       />
     </svg>

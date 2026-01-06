@@ -151,12 +151,16 @@ function deformPoints(points, vx, vy, maxDeform = 0.6) {
   });
 }
 
+const CURSOR_CONTRAST_KEY = "sky-cursor-contrast";
+
 export default function BlobCursor() {
   const svgRef = useRef(null);
   const pathRef = useRef(null);
   const glowRef = useRef(null);
+  const outlineRef = useRef(null);
   const [isClient, setIsClient] = useState(false);
   const [isMagnetic, setIsMagnetic] = useState(false);
+  const [contrastMode, setContrastMode] = useState(false); // false = blend mode, true = outline
 
   const MAGNET_KEY = "sky-magnet";
 
@@ -194,6 +198,8 @@ export default function BlobCursor() {
     try {
       const stored = localStorage.getItem(MAGNET_KEY);
       if (stored) magnetModeRef.current = stored;
+      const storedContrast = localStorage.getItem(CURSOR_CONTRAST_KEY);
+      if (storedContrast !== null) setContrastMode(storedContrast === "true");
     } catch {}
 
     const onMagnetMode = (e) => {
@@ -204,6 +210,11 @@ export default function BlobCursor() {
       strengthSmoothed.current = 0;
     };
     window.addEventListener("sky-magnet-change", onMagnetMode);
+
+    const onContrastChange = (e) => {
+      setContrastMode(e?.detail ?? false);
+    };
+    window.addEventListener("sky-cursor-contrast-change", onContrastChange);
     
     mousePos.current = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
     cursorPos.current = { ...mousePos.current };
@@ -366,6 +377,7 @@ export default function BlobCursor() {
 
       if (pathRef.current) pathRef.current.setAttribute('d', path);
       if (glowRef.current) glowRef.current.setAttribute('d', path);
+      if (outlineRef.current) outlineRef.current.setAttribute('d', path);
       if (svgRef.current) {
         svgRef.current.style.transform = `translate3d(${cursorPos.current.x}px, ${cursorPos.current.y}px, 0)`;
       }
@@ -381,6 +393,7 @@ export default function BlobCursor() {
       window.removeEventListener("resize", refreshMagnetElements);
       window.removeEventListener("scroll", refreshMagnetElements);
       window.removeEventListener("sky-magnet-change", onMagnetMode);
+      window.removeEventListener("sky-cursor-contrast-change", onContrastChange);
       if (raf.current) cancelAnimationFrame(raf.current);
     };
   }, []);
@@ -401,8 +414,9 @@ export default function BlobCursor() {
         marginTop: -40,
         pointerEvents: 'none',
         zIndex: 99999,
-        mixBlendMode: 'difference',
         willChange: 'transform',
+        // Use blend mode only when contrast mode is OFF
+        mixBlendMode: contrastMode ? 'normal' : 'difference',
       }}
       viewBox="-40 -40 80 80"
     >
@@ -414,12 +428,29 @@ export default function BlobCursor() {
             <feMergeNode in="SourceGraphic" />
           </feMerge>
         </filter>
+        {/* Drop shadow for contrast on any background */}
+        <filter id="blob-cursor-shadow" x="-50%" y="-50%" width="200%" height="200%">
+          <feDropShadow dx="0" dy="0" stdDeviation="2" floodColor="var(--sky-bg)" floodOpacity="0.8" />
+        </filter>
       </defs>
+      
+      {/* Contrast outline - only visible when contrast mode is ON */}
+      {contrastMode && (
+        <path
+          ref={outlineRef}
+          d="M14,0 A14,14 0 1,1 -14,0 A14,14 0 1,1 14,0"
+          fill="none"
+          stroke="var(--sky-bg)"
+          strokeWidth="3"
+          opacity={0.5}
+          filter="url(#blob-cursor-glow)"
+        />
+      )}
       
       <path
         ref={glowRef}
         d="M14,0 A14,14 0 1,1 -14,0 A14,14 0 1,1 14,0"
-        fill="var(--sky-accent, #b08d57)"
+        fill="var(--sky-accent)"
         opacity={isMagnetic ? 0.5 : 0.25}
         filter="url(#blob-cursor-glow)"
       />
@@ -427,7 +458,7 @@ export default function BlobCursor() {
       <path
         ref={pathRef}
         d="M14,0 A14,14 0 1,1 -14,0 A14,14 0 1,1 14,0"
-        fill="var(--sky-accent, #b08d57)"
+        fill="var(--sky-accent)"
         opacity={isMagnetic ? 1 : 0.85}
       />
     </svg>
