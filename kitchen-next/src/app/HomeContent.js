@@ -90,7 +90,7 @@ export default function HomeContent({ products }) {
             <AnimateOnScroll variant="fadeUp" delay={0}>
               <div className="flex items-center gap-3 text-xs font-medium tracking-[0.25em] text-white/70">
                 <span className="h-[1px] w-8 bg-current opacity-50" />
-                SKY KITCHENS
+                SKYY FURNITURE
               </div>
             </AnimateOnScroll>
 
@@ -176,7 +176,7 @@ export default function HomeContent({ products }) {
                   COLLECTIONS
                 </div>
                 <h2 className="mt-2 text-2xl font-light tracking-[-0.01em] text-[var(--sky-fg)] sm:text-3xl">
-                  Колекції <span className="font-normal">SKY</span>
+                  Колекції <span className="font-normal">SKYY</span>
                 </h2>
               </div>
               <Link
@@ -539,7 +539,7 @@ export default function HomeContent({ products }) {
             {[
               {
                 id: "price",
-                question: "Скільки коштує кухня SKY?",
+                question: "Скільки коштує кухня SKYY?",
                 answer: "Вартість залежить від розміру, матеріалів та комплектації. Компактні рішення починаються від €4,200, стандартні кухні — від €5,900, преміум-композиції з індивідуальними матеріалами — від €9,800. Точну ціну ви отримаєте після замірів та затвердження проєкту.",
               },
               {

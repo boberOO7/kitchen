@@ -39,7 +39,7 @@ select:-webkit-autofill:active {
   transition: background-color 5000s ease-in-out 0s;
 }
 
-/* SKY preloaders */
+/* SKYY preloaders */
 @keyframes sky-preloader-sweep {
   0% {
     transform: translateX(-120%);
@@ -58,7 +58,7 @@ select:-webkit-autofill:active {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   SKY KITCHENS — Luxury Minimal Design System
+   SKYY FURNITURE — Luxury Minimal Design System
    4 Palettes × 2 Modes (Light/Dark) = 8 themes
    ═══════════════════════════════════════════════════════════════════════════ */
 

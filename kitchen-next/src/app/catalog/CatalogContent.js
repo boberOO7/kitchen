@@ -12,7 +12,28 @@ function formatPrice(minorUnits) {
   return formatPriceFromMinor(minorUnits);
 }
 
-export default function CatalogContent({ products }) {
+// Category config
+const categoryConfig = {
+  kitchens: {
+    eyebrow: "KITCHENS",
+    title: "Кухні",
+    description: "Оберіть базову композицію та налаштуйте матеріали під ваш інтерʼєр у 3D-конфігураторі.",
+  },
+  living: {
+    eyebrow: "LIVING",
+    title: "Вітальні",
+    description: "Меблі для вітальні в стилі мінімалізму.",
+  },
+  bedroom: {
+    eyebrow: "BEDROOM",
+    title: "Спальні",
+    description: "Меблі для спальні в стилі мінімалізму.",
+  },
+};
+
+export default function CatalogContent({ products, category = "kitchens" }) {
+  const config = categoryConfig[category] || categoryConfig.kitchens;
+
   return (
     <>
       {/* Hero */}
@@ -21,20 +42,19 @@ export default function CatalogContent({ products }) {
           <AnimateOnScroll variant="fadeUp">
             <div className="flex items-center gap-3 text-xs font-medium tracking-[0.25em] text-[var(--sky-hero-muted)]">
               <span className="h-[1px] w-8 bg-current opacity-50" />
-              CATALOG
+              {config.eyebrow}
             </div>
           </AnimateOnScroll>
           
           <AnimateOnScroll variant="fadeUp" delay={0.1}>
             <h1 className="mt-4 text-3xl font-light tracking-[-0.02em] text-[var(--sky-hero-fg)] sm:text-4xl">
-              Всі колекції <span className="font-normal">SKY</span>
+              {config.title} <span className="font-normal">SKYY</span>
             </h1>
           </AnimateOnScroll>
           
           <AnimateOnScroll variant="fadeUp" delay={0.2}>
             <p className="mt-3 max-w-[48ch] text-sm leading-relaxed text-[var(--sky-hero-muted)]">
-              Оберіть базову композицію та налаштуйте матеріали під ваш інтерʼєр
-              у 3D-конфігураторі.
+              {config.description}
             </p>
           </AnimateOnScroll>
         </div>

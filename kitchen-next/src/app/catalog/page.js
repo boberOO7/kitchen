@@ -1,8 +1,5 @@
-import { getProducts } from "@/data/products-db";
-import CatalogContent from "./CatalogContent";
+import { redirect } from "next/navigation";
 
-export default async function CatalogPage() {
-  const products = await getProducts();
-  
-  return <CatalogContent products={products} />;
+export default function CatalogPage() {
+  redirect("/catalog/kitchens");
 }

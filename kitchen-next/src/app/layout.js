@@ -20,10 +20,10 @@ const inter = Inter({
 
 export const metadata = {
   title: {
-    default: "SKY Kitchens",
-    template: "%s · SKY Kitchens",
+    default: "SKYY Furniture",
+    template: "%s · SKYY Furniture",
   },
-  description: "Luxury minimal kitchens with a live 3D configurator.",
+  description: "Luxury minimal furniture with a live 3D configurator.",
 };
 
 export default function RootLayout({ children }) {

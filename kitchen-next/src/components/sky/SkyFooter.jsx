@@ -1,9 +1,15 @@
 import Link from "next/link";
 
-const links = [
-  { href: "/catalog", label: "Каталог" },
+const catalogLinks = [
+  { href: "/catalog/kitchens", label: "Кухні" },
+  { href: "/catalog/living", label: "Вітальні" },
+  { href: "/catalog/bedroom", label: "Спальні" },
+];
+
+const navLinks = [
   { href: "/configurator", label: "Конфігуратор" },
   { href: "/#materials", label: "Матеріали" },
+  { href: "/contacts", label: "Контакти" },
 ];
 
 export default function SkyFooter() {
@@ -15,10 +21,10 @@ export default function SkyFooter() {
           <div className="lg:col-span-2">
             <div className="flex items-center gap-2">
               <span className="text-sm font-semibold tracking-[0.2em] text-[var(--sky-fg)]">
-                SKY
+                SKYY
               </span>
               <span className="text-xs tracking-[0.08em] text-[var(--sky-muted)]">
-                kitchens
+                furniture
               </span>
             </div>
             <p className="mt-3 max-w-[36ch] text-sm leading-relaxed text-[var(--sky-muted)]">
@@ -26,13 +32,13 @@ export default function SkyFooter() {
             </p>
           </div>
 
-          {/* Links */}
+          {/* Catalog Links */}
           <div>
             <div className="text-xs font-medium tracking-[0.15em] text-[var(--sky-muted2)]">
-              НАВІГАЦІЯ
+              КАТАЛОГ
             </div>
             <ul className="mt-4 space-y-2.5">
-              {links.map((l) => (
+              {catalogLinks.map((l) => (
                 <li key={l.href}>
                   <Link
                     href={l.href}
@@ -45,30 +51,30 @@ export default function SkyFooter() {
             </ul>
           </div>
 
-          {/* Contact */}
+          {/* Navigation Links */}
           <div>
             <div className="text-xs font-medium tracking-[0.15em] text-[var(--sky-muted2)]">
-              КОНТАКТИ
+              НАВІГАЦІЯ
             </div>
-            <ul className="mt-4 space-y-2.5 text-sm text-[var(--sky-muted)]">
-              <li>
-                <a href="tel:+380501234567" className="transition hover:text-[var(--sky-fg)]">
-                  +380 50 123 45 67
-                </a>
-              </li>
-              <li>
-                <a href="mailto:hello@sky.kitchen" className="transition hover:text-[var(--sky-fg)]">
-                  hello@sky.kitchen
-                </a>
-              </li>
-              <li>Київ, Україна</li>
+            <ul className="mt-4 space-y-2.5">
+              {navLinks.map((l) => (
+                <li key={l.href}>
+                  <Link
+                    href={l.href}
+                    className="text-sm text-[var(--sky-muted)] transition hover:text-[var(--sky-fg)]"
+                  >
+                    {l.label}
+                  </Link>
+                </li>
+              ))}
             </ul>
           </div>
+
         </div>
 
         {/* Bottom */}
         <div className="mt-12 flex flex-col items-center justify-between gap-4 border-t border-[var(--sky-border)] pt-6 text-xs text-[var(--sky-muted2)] sm:flex-row">
-          <div>© {new Date().getFullYear()} SKY Kitchens. Всі права захищено.</div>
+          <div>© {new Date().getFullYear()} SKYY Furniture. Всі права захищено.</div>
           <div className="flex gap-5">
             <Link href="/privacy" className="transition hover:text-[var(--sky-fg)]">
               Політика конфіденційності
