@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useMemo, useState, useEffect } from "react";
-import { Canvas } from "@react-three/fiber";
+import React, { useMemo, useState, useEffect, useRef } from "react";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Bounds, ContactShadows, Environment, OrbitControls, useProgress } from "@react-three/drei";
 import * as THREE from "three";
 
@@ -19,6 +19,188 @@ import { formatUahFromMinor, convertUsdToUah } from "@/lib/nbu";
 // Price formatter (converts from minor units for display)
 function formatPrice(minorUnits) {
   return formatPriceFromMinor(minorUnits);
+}
+
+// Smooth theme transition for canvas background
+const TRANSITION_DURATION = 0.5; // seconds, matches CSS transition
+
+// CSS "ease" timing function: cubic-bezier(0.25, 0.1, 0.25, 1.0)
+function easeInOut(t) {
+  // Attempt to match CSS "ease" - fast in middle, slow at ends
+  return t < 0.5
+    ? 4 * t * t * t
+    : 1 - Math.pow(-2 * t + 2, 3) / 2;
+}
+
+function SmoothBackground({ targetColor, isDark }) {
+  const { gl, scene } = useThree();
+  const startColor = useRef(new THREE.Color(targetColor));
+  const endColor = useRef(new THREE.Color(targetColor));
+  const displayColor = useRef(new THREE.Color(targetColor));
+  const transitionProgress = useRef(1); // 1 = complete
+  
+  // Tone mapping exposure animation
+  const targetExposure = isDark ? 0.85 : 1.0;
+  const startExposure = useRef(targetExposure);
+  const endExposure = useRef(targetExposure);
+  const currentExposure = useRef(targetExposure);
+  const exposureProgress = useRef(1);
+
+  useEffect(() => {
+    // When target color changes, start a new transition
+    // Capture current displayed color as start point
+    startColor.current.copy(displayColor.current);
+    endColor.current.set(targetColor);
+    transitionProgress.current = 0;
+  }, [targetColor]);
+
+  useEffect(() => {
+    // Start exposure transition
+    startExposure.current = currentExposure.current;
+    endExposure.current = targetExposure;
+    exposureProgress.current = 0;
+  }, [targetExposure]);
+
+  useFrame((_, delta) => {
+    // Animate background color
+    if (transitionProgress.current < 1) {
+      transitionProgress.current = Math.min(1, transitionProgress.current + delta / TRANSITION_DURATION);
+      const easedProgress = easeInOut(transitionProgress.current);
+      displayColor.current.copy(startColor.current).lerp(endColor.current, easedProgress);
+      scene.background = displayColor.current;
+    }
+    
+    // Animate tone mapping exposure
+    if (exposureProgress.current < 1) {
+      exposureProgress.current = Math.min(1, exposureProgress.current + delta / TRANSITION_DURATION);
+      const easedProgress = easeInOut(exposureProgress.current);
+      currentExposure.current = startExposure.current + (endExposure.current - startExposure.current) * easedProgress;
+      gl.toneMappingExposure = currentExposure.current;
+    }
+  });
+
+  return null;
+}
+
+// Smooth floor color transition
+function SmoothFloor({ targetColor }) {
+  const meshRef = useRef();
+  const startColor = useRef(new THREE.Color(targetColor));
+  const endColor = useRef(new THREE.Color(targetColor));
+  const displayColor = useRef(new THREE.Color(targetColor));
+  const transitionProgress = useRef(1);
+
+  useEffect(() => {
+    // Capture current displayed color as start point
+    startColor.current.copy(displayColor.current);
+    endColor.current.set(targetColor);
+    transitionProgress.current = 0;
+  }, [targetColor]);
+
+  useFrame((_, delta) => {
+    if (transitionProgress.current < 1 && meshRef.current) {
+      transitionProgress.current = Math.min(1, transitionProgress.current + delta / TRANSITION_DURATION);
+      const easedProgress = easeInOut(transitionProgress.current);
+      displayColor.current.copy(startColor.current).lerp(endColor.current, easedProgress);
+      meshRef.current.material.color.copy(displayColor.current);
+    }
+  });
+
+  return (
+    <mesh ref={meshRef} rotation={[-Math.PI / 2, 0, 0]} receiveShadow position={[0, 0, 0]}>
+      <planeGeometry args={[14, 14]} />
+      <meshStandardMaterial color={targetColor} roughness={0.92} metalness={0} />
+    </mesh>
+  );
+}
+
+// Smooth ambient light intensity transition
+function SmoothAmbientLight({ targetIntensity }) {
+  const lightRef = useRef();
+  const startIntensity = useRef(targetIntensity);
+  const endIntensity = useRef(targetIntensity);
+  const currentIntensity = useRef(targetIntensity);
+  const transitionProgress = useRef(1);
+  const initialized = useRef(false);
+
+  useEffect(() => {
+    if (!initialized.current) {
+      // First mount - set initial intensity directly
+      initialized.current = true;
+      return;
+    }
+    // Start animation on subsequent changes
+    startIntensity.current = currentIntensity.current;
+    endIntensity.current = targetIntensity;
+    transitionProgress.current = 0;
+  }, [targetIntensity]);
+
+  // Set initial intensity on mount
+  useEffect(() => {
+    if (lightRef.current) {
+      lightRef.current.intensity = targetIntensity;
+      currentIntensity.current = targetIntensity;
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useFrame((_, delta) => {
+    if (transitionProgress.current < 1 && lightRef.current) {
+      transitionProgress.current = Math.min(1, transitionProgress.current + delta / TRANSITION_DURATION);
+      const easedProgress = easeInOut(transitionProgress.current);
+      currentIntensity.current = startIntensity.current + (endIntensity.current - startIntensity.current) * easedProgress;
+      lightRef.current.intensity = currentIntensity.current;
+    }
+  });
+
+  // Don't pass intensity prop - control entirely via ref
+  return <ambientLight ref={lightRef} />;
+}
+
+// Smooth directional light intensity transition
+function SmoothDirectionalLight({ position, targetIntensity, castShadow = false, shadowProps = {} }) {
+  const lightRef = useRef();
+  const startIntensity = useRef(targetIntensity);
+  const endIntensity = useRef(targetIntensity);
+  const currentIntensity = useRef(targetIntensity);
+  const transitionProgress = useRef(1);
+  const initialized = useRef(false);
+
+  useEffect(() => {
+    if (!initialized.current) {
+      initialized.current = true;
+      return;
+    }
+    startIntensity.current = currentIntensity.current;
+    endIntensity.current = targetIntensity;
+    transitionProgress.current = 0;
+  }, [targetIntensity]);
+
+  // Set initial intensity on mount
+  useEffect(() => {
+    if (lightRef.current) {
+      lightRef.current.intensity = targetIntensity;
+      currentIntensity.current = targetIntensity;
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useFrame((_, delta) => {
+    if (transitionProgress.current < 1 && lightRef.current) {
+      transitionProgress.current = Math.min(1, transitionProgress.current + delta / TRANSITION_DURATION);
+      const easedProgress = easeInOut(transitionProgress.current);
+      currentIntensity.current = startIntensity.current + (endIntensity.current - startIntensity.current) * easedProgress;
+      lightRef.current.intensity = currentIntensity.current;
+    }
+  });
+
+  // Don't pass intensity prop - control entirely via ref
+  return (
+    <directionalLight
+      ref={lightRef}
+      position={position}
+      castShadow={castShadow}
+      {...shadowProps}
+    />
+  );
 }
 
 // 3D Model Loading overlay
@@ -79,6 +261,20 @@ function ModelLoader() {
 const MODEL_SCALE = [1, 1, 1];
 const MODEL_POS = [1.25, 0, 0];
 
+// All available drei Environment presets
+const ENV_PRESETS = [
+  { id: "studio", label: "Studio", description: "Нейтральне студійне" },
+  { id: "apartment", label: "Apartment", description: "Квартира, тепле" },
+  { id: "warehouse", label: "Warehouse", description: "Склад, м'яке" },
+  { id: "lobby", label: "Lobby", description: "Лобі, збалансоване" },
+  { id: "city", label: "City", description: "Місто, урбан" },
+  { id: "dawn", label: "Dawn", description: "Світанок, теплі тони" },
+  { id: "sunset", label: "Sunset", description: "Захід сонця" },
+  { id: "forest", label: "Forest", description: "Ліс, зелені тони" },
+  { id: "park", label: "Park", description: "Парк, натуральне" },
+  { id: "night", label: "Night", description: "Ніч, темне" },
+];
+
 function makeChipStyle(opt) {
   const v = opt?.value;
   if (typeof v === "string" && v.trim().startsWith("#")) {
@@ -101,6 +297,8 @@ export default function KitchenConfigurator({ mode = "embedded", product = null 
   const [openSection, setOpenSection] = useState("facade");
   const [isAddingToCart, setIsAddingToCart] = useState(false);
   const [exchangeRate, setExchangeRate] = useState(null);
+  const [envPreset, setEnvPreset] = useState("studio");
+  const [showEnvPicker, setShowEnvPicker] = useState(false);
   const { addToCart, isPending } = useCart();
   const { canvasBg, canvasFloor, isDark } = useThemeColors();
 
@@ -319,30 +517,36 @@ export default function KitchenConfigurator({ mode = "embedded", product = null 
           gl={{ antialias: true, powerPreference: "high-performance" }}
           shadows
           camera={{ position: [3.2, 2.2, 4.0], fov: 32 }}
-          onCreated={({ gl }) => {
+          onCreated={({ gl, scene }) => {
             gl.outputColorSpace = THREE.SRGBColorSpace;
             gl.toneMapping = THREE.ACESFilmicToneMapping;
             gl.toneMappingExposure = isDark ? 0.85 : 1.0;
+            // Set initial background color
+            scene.background = new THREE.Color(canvasBg);
           }}
         >
-          <color attach="background" args={[canvasBg]} />
-          <ambientLight intensity={isDark ? 0.5 : 0.4} />
-          <directionalLight
+          {/* Smooth background color transition */}
+          <SmoothBackground targetColor={canvasBg} isDark={isDark} />
+          
+          {/* Smooth light transitions */}
+          <SmoothAmbientLight targetIntensity={isDark ? 0.5 : 0.4} />
+          <SmoothDirectionalLight
             position={[3, 6, 4]}
-            intensity={isDark ? 0.9 : 1.1}
+            targetIntensity={isDark ? 0.9 : 1.1}
             castShadow
-            shadow-normalBias={0.02}
-            shadow-mapSize-width={2048}
-            shadow-mapSize-height={2048}
+            shadowProps={{
+              "shadow-normalBias": 0.02,
+              "shadow-mapSize-width": 2048,
+              "shadow-mapSize-height": 2048,
+            }}
           />
-          {/* Extra fill light for dark theme */}
-          {isDark && (
-            <directionalLight
-              position={[-2, 3, -2]}
-              intensity={0.3}
-            />
-          )}
-          <Environment preset={isDark ? "night" : "apartment"} />
+          {/* Fill light - animates intensity instead of appearing/disappearing */}
+          <SmoothDirectionalLight
+            position={[-2, 3, -2]}
+            targetIntensity={isDark ? 0.3 : 0}
+          />
+          {/* Environment for reflections - user-selectable preset */}
+          <Environment preset={envPreset} background={false} />
 
           <OrbitControls
             makeDefault
@@ -354,11 +558,8 @@ export default function KitchenConfigurator({ mode = "embedded", product = null 
             maxDistance={8}
           />
 
-          {/* Floor */}
-          <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow position={[0, 0, 0]}>
-            <planeGeometry args={[14, 14]} />
-            <meshStandardMaterial color={canvasFloor} roughness={0.92} metalness={0} />
-          </mesh>
+          {/* Floor with smooth color transition */}
+          <SmoothFloor targetColor={canvasFloor} />
 
           {/* All models preloaded, toggle visibility for instant switching */}
           <Bounds fit clip observe margin={1.15}>
@@ -373,6 +574,58 @@ export default function KitchenConfigurator({ mode = "embedded", product = null 
 
           <ContactShadows position={[0, 0.001, 0]} opacity={0.2} width={10} height={10} blur={1.6} far={1.8} />
         </Canvas>
+
+        {/* Environment preset picker */}
+        <div className="absolute right-4 top-4">
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setShowEnvPicker(!showEnvPicker)}
+              className="flex items-center gap-2 border border-[var(--sky-border)] bg-[var(--sky-surface)]/90 px-3 py-2 text-xs text-[var(--sky-fg)] backdrop-blur-sm transition hover:bg-[var(--sky-surface)]"
+              style={{ borderRadius: 2 }}
+            >
+              <svg className="h-4 w-4 opacity-70" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-4.773-4.227l-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z" />
+              </svg>
+              <span>{ENV_PRESETS.find(p => p.id === envPreset)?.label || "Environment"}</span>
+              <svg className={`h-3 w-3 opacity-60 transition-transform ${showEnvPicker ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+
+            {showEnvPicker && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setShowEnvPicker(false)} />
+                <div
+                  className="absolute right-0 top-full z-50 mt-1 max-h-[300px] min-w-[180px] overflow-y-auto border border-[var(--sky-border)] bg-[var(--sky-surface)] p-1 shadow-lg"
+                  style={{ borderRadius: 2 }}
+                >
+                  {ENV_PRESETS.map((preset) => (
+                    <button
+                      key={preset.id}
+                      type="button"
+                      onClick={() => {
+                        setEnvPreset(preset.id);
+                        setShowEnvPicker(false);
+                      }}
+                      className={`flex w-full flex-col items-start gap-0.5 px-3 py-2 text-left transition ${
+                        envPreset === preset.id
+                          ? "bg-[var(--sky-accent)] text-[var(--sky-accent-fg)]"
+                          : "text-[var(--sky-fg)] hover:bg-[var(--sky-bg-alt)]"
+                      }`}
+                      style={{ borderRadius: 1 }}
+                    >
+                      <span className="text-xs font-medium">{preset.label}</span>
+                      <span className={`text-[10px] ${envPreset === preset.id ? "opacity-80" : "text-[var(--sky-muted)]"}`}>
+                        {preset.description}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
 
         {/* Hints overlay */}
         <div className="pointer-events-none absolute bottom-4 left-4 right-4 flex items-end justify-between text-[10px] tracking-[0.06em] text-[var(--sky-muted2)]">
