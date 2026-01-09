@@ -10,9 +10,11 @@ import { track } from "@/lib/analytics";
 // Pixabay CDN video URL (free, allows hotlinking) - modern architecture interior
 const HERO_VIDEO_URL = "https://cdn.pixabay.com/video/2020/05/25/40130-424930032_large.mp4";
 
-// Fixed price formatter to avoid hydration mismatch (server vs client locale)
-function formatPrice(price) {
-  return new Intl.NumberFormat("uk-UA").format(price);
+import { formatPriceFromMinor } from "@/lib/currency";
+
+// Price formatter (converts from minor units for display)
+function formatPrice(minorUnits) {
+  return formatPriceFromMinor(minorUnits);
 }
 
 export default function HomeContent({ products }) {

@@ -6,8 +6,10 @@ import { useCart } from "@/contexts/CartContext";
 import { getProductImageUrl } from "@/lib/storage";
 import AnimateOnScroll, { StaggerContainer, StaggerItem } from "@/components/animations/AnimateOnScroll";
 
-function formatPrice(price) {
-  return new Intl.NumberFormat("uk-UA").format(price);
+import { formatPriceFromMinor } from "@/lib/currency";
+
+function formatPrice(minorUnits) {
+  return formatPriceFromMinor(minorUnits);
 }
 
 export default function CartPageContent() {
@@ -199,11 +201,12 @@ export default function CartPageContent() {
                       </div>
                     </div>
 
-                    <button
-                      className="mt-6 w-full rounded bg-[var(--sky-accent)] px-4 py-4 text-sm font-medium text-[var(--sky-accent-fg)] transition-opacity hover:opacity-90"
+                    <Link
+                      href="/checkout"
+                      className="mt-6 w-full flex items-center justify-center rounded bg-[var(--sky-accent)] px-4 py-4 text-sm font-medium text-[var(--sky-accent-fg)] transition-opacity hover:opacity-90"
                     >
-                      Оформити замовлення
-                    </button>
+                      Перейти до оформлення
+                    </Link>
 
                     <Link
                       href="/catalog"
@@ -221,4 +224,3 @@ export default function CartPageContent() {
     </>
   );
 }
-

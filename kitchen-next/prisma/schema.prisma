@@ -10,11 +10,38 @@ model User {
   id         String    @id @default(uuid())
   email      String    @unique
   name       String?
+  firstName  String?
+  lastName   String?
+  phone      String?
+  
+  // Notification preferences
+  notificationEmailEnabled  Boolean @default(true)
+  notificationOrdersEnabled Boolean @default(true)
+  marketingEnabled          Boolean @default(false)
+  
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
   authUserId String    @unique
   orders     Order[]
   projects   Project[]
+  addresses  Address[]
+}
+
+model Address {
+  id             String   @id @default(uuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  label          String?  // "Дім", "Робота", etc.
+  city           String
+  address        String   // Warehouse number or street address
+  deliveryMethod String   // "nova_poshta_warehouse", "nova_poshta_courier", "ukrposhta"
+  isDefault      Boolean  @default(false)
+  
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  
+  @@index([userId])
 }
 
 model Project {
@@ -48,26 +75,26 @@ model Product {
   sku         String?     @unique
   name        String
   description String?
-  price       Int
+  priceMinor  Int         // Price in minor units (cents/kopeks)
   currency    String      @default("USD")
   isActive    Boolean     @default(true)
-  imageKey    String?  // "products/xxx.png" (Supabase Storage)
+  imageKey    String?     // "products/xxx.png" (Supabase Storage)
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
   items       OrderItem[]
 }
 
 model OrderItem {
-  id         String   @id @default(uuid())
-  orderId    String
-  productId  String?
-  name       String
-  unitPrice  Int
-  quantity   Int      @default(1)
-  total      Int
-  configId   String?
-  order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  product    Product? @relation(fields: [productId], references: [id])
+  id             String   @id @default(uuid())
+  orderId        String
+  productId      String?
+  name           String
+  unitPriceMinor Int      // Unit price in minor units (cents/kopeks)
+  quantity       Int      @default(1)
+  totalMinor     Int      // Line total in minor units (cents/kopeks)
+  configId       String?
+  order          Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product        Product? @relation(fields: [productId], references: [id])
 
   @@index([orderId])
   @@index([productId])
@@ -75,23 +102,53 @@ model OrderItem {
 
 model Order {
   id              String      @id @default(uuid())
-  userId          String
+  userId          String?     // Optional - null for anonymous carts
+  anonymousCartId String?     @unique // UUID from cookie for anonymous users
   projectId       String?
   status          OrderStatus @default(DRAFT)
   currency        String      @default("USD")
-  subtotal        Int         @default(0)
-  total           Int         @default(0)
+  subtotalMinor   Int         @default(0) // Subtotal in minor units (cents/kopeks)
+  totalMinor      Int         @default(0) // Total in minor units (cents/kopeks)
   activePaymentId String?     @unique
+  
+  // UAH conversion (fixed at order confirmation)
+  exchangeRateNbu Float?              // USD/UAH rate from NBU at order confirmation
+  totalUahMinor   Int?                // Total in UAH kopeks (totalMinor * exchangeRateNbu)
+  rateFixedAt     DateTime?           // When the exchange rate was fixed
+  
+  // Payment method selected by user
+  paymentMethod   PaymentMethod?  // MONO_CARD or MONO_INSTALLMENTS
+  
+  // Delivery info (filled during checkout)
+  deliveryMethod  String?     // "nova_poshta_warehouse", "nova_poshta_courier", "ukrposhta"
+  recipientName   String?     // Full name of recipient
+  recipientPhone  String?     // Phone number
+  recipientEmail  String?     // Email
+  deliveryCity    String?     // City name
+  deliveryAddress String?     // Warehouse number or street address
+  comment         String?     // Order comment
+  
+  // Expiration (for PENDING_PAYMENT orders)
+  expiresAt       DateTime?   // When the order payment window expires
+  expiredAt       DateTime?   // When the order was actually marked as EXPIRED
+  
+  // Terms acceptance
+  termsAcceptedAt DateTime?   // When user accepted terms during checkout
+  
   createdAt       DateTime    @default(now())
   updatedAt       DateTime    @updatedAt
   activePayment   Payment?    @relation("ActivePayment", fields: [activePaymentId], references: [id])
   project         Project?    @relation(fields: [projectId], references: [id])
-  user            User        @relation(fields: [userId], references: [id])
+  user            User?       @relation(fields: [userId], references: [id])
   items           OrderItem[]
   payments        Payment[]   @relation("OrderPayments")
+  installment     InstallmentApplication?  // One-to-one relation with installment application
 
   @@index([userId])
+  @@index([anonymousCartId])
   @@index([projectId])
+  @@index([status, expiresAt]) // For efficient expiration queries
+  @@index([status, updatedAt]) // For anonymous cart cleanup
 }
 
 model Payment {
@@ -99,7 +156,7 @@ model Payment {
   orderId        String
   provider       PaymentProvider @default(MONOBANK)
   status         PaymentStatus   @default(CREATED)
-  amount         Int
+  amountMinor    Int             // Amount in minor units (cents/kopeks)
   currency       String          @default("USD")
   providerRef    String?         @unique
   webhookEventId String?         @unique
@@ -119,11 +176,13 @@ enum OrderStatus {
   PENDING_PAYMENT
   PAID
   CANCELLED
+  EXPIRED
   REFUNDED
 }
 
 enum PaymentProvider {
   MONOBANK
+  MONOBANK_INSTALLMENTS
   STRIPE
 }
 
@@ -134,4 +193,50 @@ enum PaymentStatus {
   FAILED
   CANCELED
   REFUNDED
+}
+
+// Payment method selected by user at checkout
+enum PaymentMethod {
+  MONO_CARD           // Standard Monobank card payment
+  MONO_INSTALLMENTS   // "Покупка частинами" installments
+}
+
+// Status for installment applications
+enum InstallmentStatus {
+  CREATED              // Application created, awaiting submission to mono
+  PENDING_CUSTOMER     // Waiting for customer to confirm in monobank app
+  PENDING_MERCHANT     // Waiting for merchant to confirm (2-step flow)
+  APPROVED             // Application approved, payment will be processed
+  DECLINED             // Application declined (insufficient limit, etc.)
+  CANCELED             // Canceled by user or system
+  EXPIRED              // Application expired
+}
+
+// Monobank "Покупка частинами" (installments) application
+model InstallmentApplication {
+  id                String            @id @default(uuid())
+  orderId           String            @unique
+  order             Order             @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  
+  // Payment method and status
+  method            PaymentMethod     @default(MONO_INSTALLMENTS)
+  status            InstallmentStatus @default(CREATED)
+  
+  // Monobank application details
+  monoApplicationId String?           @unique  // Mono's application ID
+  months            Int                        // Number of installment months (3, 6, 9, 12, etc.)
+  monthlyAmount     Int?                       // Monthly payment in kopeks (calculated by mono)
+  totalAmount       Int                        // Total amount in kopeks
+  
+  // Customer info for installments
+  customerPhone     String                     // Required for installments
+  
+  // Webhook data
+  rawCallback       Json?                      // Raw callback payload for debugging
+  
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  @@index([status, updatedAt])
+  @@index([orderId])
 }

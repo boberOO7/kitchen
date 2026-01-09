@@ -7,6 +7,7 @@ import {
   updateCartItem as updateCartItemAction,
   removeFromCart as removeFromCartAction,
   clearCart as clearCartAction,
+  mergeAnonymousCart as mergeAnonymousCartAction,
 } from "@/app/actions/cart";
 
 const CartContext = createContext(null);
@@ -171,8 +172,7 @@ export function CartProvider({ children }) {
     fetchCart();
   }, [fetchCart]);
 
-  // Add to cart - this one still needs server reconciliation 
-  // because we're creating new items
+  // Add to cart - works for both logged in users and anonymous
   const addToCart = useCallback(async (productId, quantity = 1, productInfo = null) => {
     const previousCart = cart;
     
@@ -186,15 +186,22 @@ export function CartProvider({ children }) {
       
       if (result.success && result.cart) {
         setCart(result.cart);
-      } else if (result.error === "UNAUTHORIZED") {
-        setCart(previousCart);
-        window.location.href = "/login";
       } else {
         setCart(previousCart);
         console.error("Failed to add to cart:", result.error);
       }
     });
   }, [cart]);
+
+  // Merge anonymous cart after login - call this after auth state changes
+  const mergeAnonymousCart = useCallback(async () => {
+    const result = await mergeAnonymousCartAction();
+    if (result.success && result.merged) {
+      // Refetch to get merged cart
+      await fetchCart();
+    }
+    return result;
+  }, [fetchCart]);
 
   // Update quantity - FIRE AND FORGET with debounce
   // Optimistic update is instant, server sync happens in background
@@ -278,6 +285,7 @@ export function CartProvider({ children }) {
     updateQuantity,
     removeItem,
     clearCart,
+    mergeAnonymousCart,
     refetch: fetchCart,
     openDrawer,
     closeDrawer,

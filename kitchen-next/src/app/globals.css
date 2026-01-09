@@ -18,6 +18,27 @@ body,
   cursor: auto !important;
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   FIX: Browser autofill background color
+   ═══════════════════════════════════════════════════════════════════════════ */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active,
+textarea:-webkit-autofill,
+textarea:-webkit-autofill:hover,
+textarea:-webkit-autofill:focus,
+textarea:-webkit-autofill:active,
+select:-webkit-autofill,
+select:-webkit-autofill:hover,
+select:-webkit-autofill:focus,
+select:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 1000px var(--sky-bg) inset !important;
+  -webkit-text-fill-color: var(--sky-fg) !important;
+  caret-color: var(--sky-fg) !important;
+  transition: background-color 5000s ease-in-out 0s;
+}
+
 /* SKY preloaders */
 @keyframes sky-preloader-sweep {
   0% {
@@ -72,6 +93,10 @@ body,
     --sky-header-muted: #525252;
     --sky-header-surface: #f5f5f5;
     --sky-header-surface-hover: #ebebeb;
+    
+    /* 3D Canvas */
+    --sky-canvas-bg: #f4f5f6;
+    --sky-canvas-floor: #f0f1f3;
   }
 
   /* MONOCHROME — DARK */
@@ -102,6 +127,10 @@ body,
     --sky-header-muted: #a3a3a3;
     --sky-header-surface: #1f1f1f;
     --sky-header-surface-hover: #2a2a2a;
+    
+    /* 3D Canvas */
+    --sky-canvas-bg: #1a1a1a;
+    --sky-canvas-floor: #202020;
   }
 
   /* ─────────────────────────────────────────────────────────────────────────
@@ -133,6 +162,10 @@ body,
     --sky-header-muted: #57534e;
     --sky-header-surface: #f5f0e8;
     --sky-header-surface-hover: #ebe5db;
+    
+    /* 3D Canvas */
+    --sky-canvas-bg: #f7f4f0;
+    --sky-canvas-floor: #f2ede6;
   }
 
   /* WARM SAND — DARK */
@@ -162,6 +195,10 @@ body,
     --sky-header-muted: #a8a29e;
     --sky-header-surface: #33302d;
     --sky-header-surface-hover: #3d3a36;
+    
+    /* 3D Canvas */
+    --sky-canvas-bg: #252220;
+    --sky-canvas-floor: #2a2725;
   }
 
   /* ─────────────────────────────────────────────────────────────────────────
@@ -193,6 +230,10 @@ body,
     --sky-header-muted: #475569;
     --sky-header-surface: #f1f5f9;
     --sky-header-surface-hover: #e2e8f0;
+    
+    /* 3D Canvas */
+    --sky-canvas-bg: #f3f6f9;
+    --sky-canvas-floor: #eef2f6;
   }
 
   /* COOL SLATE — DARK */
@@ -222,6 +263,10 @@ body,
     --sky-header-muted: #94a3b8;
     --sky-header-surface: #283548;
     --sky-header-surface-hover: #334155;
+    
+    /* 3D Canvas */
+    --sky-canvas-bg: #182035;
+    --sky-canvas-floor: #1d2740;
   }
 
   /* ─────────────────────────────────────────────────────────────────────────
@@ -253,6 +298,10 @@ body,
     --sky-header-muted: #3d5347;
     --sky-header-surface: #ecefec;
     --sky-header-surface-hover: #dfe4df;
+    
+    /* 3D Canvas */
+    --sky-canvas-bg: #f0f3f0;
+    --sky-canvas-floor: #e8ece8;
   }
 
   /* FOREST — DARK */
@@ -282,6 +331,10 @@ body,
     --sky-header-muted: #9cb3a3;
     --sky-header-surface: #223d2c;
     --sky-header-surface-hover: #2a4a35;
+    
+    /* 3D Canvas */
+    --sky-canvas-bg: #1c3025;
+    --sky-canvas-floor: #213829;
   }
 
   /* ─────────────────────────────────────────────────────────────────────────

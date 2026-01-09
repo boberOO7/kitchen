@@ -7,8 +7,10 @@ import Image from "next/image";
 import { useCart } from "@/contexts/CartContext";
 import { getProductImageUrl } from "@/lib/storage";
 
-function formatPrice(price) {
-  return new Intl.NumberFormat("uk-UA").format(price);
+import { formatPriceFromMinor } from "@/lib/currency";
+
+function formatPrice(minorUnits) {
+  return formatPriceFromMinor(minorUnits);
 }
 
 export default function CartDrawer() {
@@ -23,7 +25,13 @@ export default function CartDrawer() {
     clearCart,
   } = useCart();
 
-  // Close drawer on escape key + prevent body scroll without layout shift
+  // Unlock scroll - called when exit animation completes
+  const unlockScroll = () => {
+    document.body.style.overflow = "";
+    document.body.style.paddingRight = "";
+  };
+
+  // Close drawer on escape key + lock scroll when open
   useEffect(() => {
     const handleEscape = (e) => {
       if (e.key === "Escape") closeDrawer();
@@ -42,13 +50,13 @@ export default function CartDrawer() {
     
     return () => {
       document.removeEventListener("keydown", handleEscape);
-      document.body.style.overflow = "";
-      document.body.style.paddingRight = "";
+      // Note: scroll unlock is handled by onExitComplete, not here
+      // This prevents scroll appearing while drawer is still animating out
     };
   }, [isDrawerOpen, closeDrawer]);
 
   return (
-    <AnimatePresence>
+    <AnimatePresence onExitComplete={unlockScroll}>
       {isDrawerOpen && (
         <>
           {/* Backdrop */}
@@ -197,7 +205,7 @@ export default function CartDrawer() {
                 {/* Actions */}
                 <div className="flex flex-col gap-3">
                   <Link
-                    href="/cart"
+                    href="/checkout"
                     onClick={closeDrawer}
                     className="flex items-center justify-center rounded bg-[var(--sky-accent)] px-4 py-3 text-sm font-medium text-[var(--sky-accent-fg)] transition-opacity hover:opacity-90"
                   >

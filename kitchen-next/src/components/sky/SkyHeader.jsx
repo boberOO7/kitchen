@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import ThemeToggle from "@/components/sky/ThemeToggle";
 import ScrollProgress from "@/components/sky/ScrollProgress";
 import CartIcon from "@/components/cart/CartIcon";
-import { track } from "@/lib/analytics";
+import AccountMenu from "@/components/header/AccountMenu";
 
 const nav = [
   { href: "/catalog", label: "Каталог" },
@@ -56,26 +56,8 @@ export default function SkyHeader() {
           {/* Cart */}
           <CartIcon />
 
-          {/* Login link */}
-          <Link
-            href="/login"
-            className="hidden items-center justify-center border border-[var(--sky-header-border)] px-3 py-2 text-xs font-medium tracking-[0.04em] text-[var(--sky-header-muted)] transition hover:text-[var(--sky-header-fg)] hover:border-[var(--sky-header-fg)] sm:inline-flex"
-            style={{ borderRadius: 2 }}
-            data-cursor-magnetic
-          >
-            Увійти
-          </Link>
-          
-          {/* Desktop CTA */}
-          <Link
-            href="/configurator"
-            onClick={() => track("cta_configurator_click", { source: "header" })}
-            className="hidden items-center justify-center bg-[var(--sky-accent)] px-4 py-2 text-xs font-medium tracking-[0.04em] text-[var(--sky-accent-fg)] transition hover:opacity-90 sm:inline-flex"
-            style={{ borderRadius: 2 }}
-            data-cursor-magnetic
-          >
-            Зібрати кухню
-          </Link>
+          {/* Account Menu */}
+          <AccountMenu />
 
           {/* Mobile menu button */}
           <button
@@ -130,29 +112,18 @@ export default function SkyHeader() {
                 className="mt-3 pt-3 border-t border-[var(--sky-header-border)]"
               >
                 <Link
-                  href="/cart"
+                  href="/checkout"
                   onClick={() => setMobileMenuOpen(false)}
                   className="block py-2.5 text-sm text-[var(--sky-header-fg)] transition hover:text-[var(--sky-accent)]"
                 >
-                  Кошик
+                  Оформити замовлення
                 </Link>
                 <Link
-                  href="/login"
+                  href="/account"
                   onClick={() => setMobileMenuOpen(false)}
                   className="block py-2.5 text-sm text-[var(--sky-header-fg)] transition hover:text-[var(--sky-accent)]"
                 >
-                  Увійти
-                </Link>
-                <Link
-                  href="/configurator"
-                  onClick={() => {
-                    track("cta_configurator_click", { source: "mobile_menu" });
-                    setMobileMenuOpen(false);
-                  }}
-                  className="mt-2 inline-flex w-full items-center justify-center bg-[var(--sky-accent)] px-4 py-2.5 text-sm font-medium text-[var(--sky-accent-fg)]"
-                  style={{ borderRadius: 2 }}
-                >
-                  Зібрати кухню
+                  Мій акаунт
                 </Link>
               </motion.div>
             </nav>
