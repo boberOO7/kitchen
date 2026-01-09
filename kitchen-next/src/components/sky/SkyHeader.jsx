@@ -57,9 +57,9 @@ export default function SkyHeader() {
 
   return (
     <header className="sticky top-0 z-50 relative border-b border-[var(--sky-header-border)] bg-[var(--sky-header-bg)] backdrop-blur-md">
-      <div className="mx-auto flex w-full max-w-[1200px] items-center justify-between px-4 py-3 sm:px-6">
+      <div className="mx-auto flex h-14 w-full max-w-[1200px] items-center justify-between px-4 sm:px-6">
         {/* Logo */}
-        <Link href="/" className="group inline-flex items-center gap-2.5" data-cursor-magnetic>
+        <Link href="/" className="group inline-flex h-full items-center gap-2.5 px-2 -ml-2" data-cursor-magnetic>
           <span className="text-sm font-semibold tracking-[0.2em] text-[var(--sky-header-fg)]">
             SKYY
           </span>
@@ -73,21 +73,22 @@ export default function SkyHeader() {
         </Link>
 
         {/* Desktop Navigation */}
-        <nav className="hidden items-center gap-7 md:flex">
+        <nav className="hidden items-center gap-1 md:flex h-full">
           {/* Catalog Dropdown */}
           <div
             ref={catalogRef}
-            className="relative"
+            className="relative h-full"
           >
             <button
               type="button"
               onClick={() => setCatalogOpen(!catalogOpen)}
-              className="flex items-center gap-1.5 text-sm text-[var(--sky-header-muted)] transition hover:text-[var(--sky-header-fg)]"
+              className="nav-hit flex items-center gap-1.5 text-sm text-[var(--sky-header-muted)] transition hover:text-[var(--sky-header-fg)]"
+              aria-current={pathname.startsWith("/catalog") ? "page" : undefined}
               data-cursor-magnetic
             >
               Каталог
               <svg
-                className={`h-3 w-3 transition-transform duration-200 ${catalogOpen ? "rotate-180" : ""}`}
+                className={`h-3 w-3 transition-transform duration-200 ease-out ${catalogOpen ? "rotate-180" : ""}`}
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
@@ -105,7 +106,7 @@ export default function SkyHeader() {
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -8 }}
                   transition={{ duration: 0.15 }}
-                  className="absolute left-0 top-full mt-2 min-w-[180px] border border-[var(--sky-header-border)] bg-[var(--sky-header-bg)] shadow-lg backdrop-blur-md"
+                  className="absolute left-0 top-full min-w-[180px] border border-[var(--sky-header-border)] bg-[var(--sky-header-bg)] shadow-lg backdrop-blur-md"
                   style={{ borderRadius: 3 }}
                 >
                   {catalogCategories.map((category, i) => (
@@ -133,7 +134,8 @@ export default function SkyHeader() {
             <Link
               key={item.href}
               href={item.href}
-              className="text-sm text-[var(--sky-header-muted)] transition hover:text-[var(--sky-header-fg)]"
+              className="nav-hit text-sm text-[var(--sky-header-muted)] transition hover:text-[var(--sky-header-fg)]"
+              aria-current={pathname === item.href || pathname.startsWith(item.href + "/") ? "page" : undefined}
               data-cursor-magnetic
             >
               {item.label}

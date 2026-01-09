@@ -421,6 +421,74 @@ select:-webkit-autofill:active {
     color: var(--sky-accent-fg);
   }
 
+  /* ─────────────────────────────────────────────────────────────────────────
+     NAVIGATION HIT STATES
+     Premium, architectural nav interactions
+     ───────────────────────────────────────────────────────────────────────── */
+  .nav-hit {
+    position: relative;
+    display: flex;
+    align-items: center;
+    height: 100%;
+    padding: 0 18px;
+    border-radius: 0;
+    transition: background 0.2s ease, color 0.2s ease;
+  }
+
+  /* Underline pseudo-element */
+  .nav-hit::after {
+    content: "";
+    position: absolute;
+    bottom: 12px;
+    left: 18px;
+    right: 18px;
+    height: 1px;
+    background: currentColor;
+    opacity: 0;
+    transform: scaleX(0.6);
+    transform-origin: center;
+    transition: opacity 0.2s ease, transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  /* Hover state - subtle premium feel */
+  .nav-hit:hover {
+    background: rgba(255, 255, 255, 0.04);
+    backdrop-filter: blur(2px);
+  }
+
+  .nav-hit:hover::after {
+    opacity: 0.6;
+    transform: scaleX(1);
+  }
+
+  /* Theme-aware hover for light mode */
+  :root[data-theme="light"] .nav-hit:hover,
+  :root:not([data-theme]) .nav-hit:hover {
+    background: rgba(0, 0, 0, 0.03);
+  }
+
+  /* Active page state - stable background + visible underline */
+  .nav-hit[aria-current="page"] {
+    background: rgba(255, 255, 255, 0.03);
+  }
+
+  .nav-hit[aria-current="page"]::after {
+    opacity: 0.75;
+    transform: scaleX(1);
+  }
+
+  /* Theme-aware active state for light mode */
+  :root[data-theme="light"] .nav-hit[aria-current="page"],
+  :root:not([data-theme]) .nav-hit[aria-current="page"] {
+    background: rgba(0, 0, 0, 0.02);
+  }
+
+  /* Click micro-interaction - tactile feedback */
+  .nav-hit:active {
+    transform: translateY(1px);
+    transition: transform 50ms ease;
+  }
+
   /* Subtle noise texture */
   body::before {
     content: "";

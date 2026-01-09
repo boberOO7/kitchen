@@ -9,6 +9,7 @@ import FluidCursor from "@/components/sky/FluidCursor";
 import BackToTop from "@/components/sky/BackToTop";
 import { Analytics } from "@vercel/analytics/react";
 import FPSCounter from "@/components/FPSCounter";
+import DevTools from "@/components/dev/DevTools";
 import { CartProvider } from "@/contexts/CartContext";
 import CartDrawer from "@/components/cart/CartDrawer";
 
@@ -63,6 +64,7 @@ export default function RootLayout({ children }) {
           <CartDrawer />
           <Analytics />
           <FPSCounter />
+          <DevTools />
         </CartProvider>
       </body>
     </html>
