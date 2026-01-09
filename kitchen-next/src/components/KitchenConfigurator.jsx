@@ -11,6 +11,7 @@ import { CARCASS_SETS, FACADE_SETS, TOP_SETS } from "@/data/configuratorOptions"
 import { useConfiguratorStore } from "@/stores/useConfiguratorStore";
 import { useCart } from "@/contexts/CartContext";
 import { getCurrentExchangeRate } from "@/app/actions/checkout";
+import { useThemeColors } from "@/hooks/useThemeColors";
 
 import { formatPriceFromMinor } from "@/lib/currency";
 import { formatUahFromMinor, convertUsdToUah } from "@/lib/nbu";
@@ -101,6 +102,7 @@ export default function KitchenConfigurator({ mode = "embedded", product = null 
   const [isAddingToCart, setIsAddingToCart] = useState(false);
   const [exchangeRate, setExchangeRate] = useState(null);
   const { addToCart, isPending } = useCart();
+  const { canvasBg, canvasFloor, isDark } = useThemeColors();
 
   // Fetch exchange rate for UAH display
   useEffect(() => {
@@ -320,20 +322,27 @@ export default function KitchenConfigurator({ mode = "embedded", product = null 
           onCreated={({ gl }) => {
             gl.outputColorSpace = THREE.SRGBColorSpace;
             gl.toneMapping = THREE.ACESFilmicToneMapping;
-            gl.toneMappingExposure = 1.0;
+            gl.toneMappingExposure = isDark ? 0.85 : 1.0;
           }}
         >
-          <color attach="background" args={["#f4f5f6"]} />
-          <ambientLight intensity={0.4} />
+          <color attach="background" args={[canvasBg]} />
+          <ambientLight intensity={isDark ? 0.5 : 0.4} />
           <directionalLight
             position={[3, 6, 4]}
-            intensity={1.1}
+            intensity={isDark ? 0.9 : 1.1}
             castShadow
             shadow-normalBias={0.02}
             shadow-mapSize-width={2048}
             shadow-mapSize-height={2048}
           />
-          <Environment preset="apartment" />
+          {/* Extra fill light for dark theme */}
+          {isDark && (
+            <directionalLight
+              position={[-2, 3, -2]}
+              intensity={0.3}
+            />
+          )}
+          <Environment preset={isDark ? "night" : "apartment"} />
 
           <OrbitControls
             makeDefault
@@ -348,7 +357,7 @@ export default function KitchenConfigurator({ mode = "embedded", product = null 
           {/* Floor */}
           <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow position={[0, 0, 0]}>
             <planeGeometry args={[14, 14]} />
-            <meshStandardMaterial color="#f0f1f3" roughness={0.92} metalness={0} />
+            <meshStandardMaterial color={canvasFloor} roughness={0.92} metalness={0} />
           </mesh>
 
           {/* All models preloaded, toggle visibility for instant switching */}
