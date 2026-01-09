@@ -111,12 +111,18 @@ function generateBlobPath(points) {
 }
 
 // Generate points around circle with organic noise
-function generateCirclePoints(numPoints, radius, noise, time) {
+function generateCirclePoints(numPoints, radius, noise, time, idleNoise = 1.5) {
   const points = [];
   for (let i = 0; i < numPoints; i++) {
     const angle = (i / numPoints) * Math.PI * 2;
-    const noiseOffset = noise * Math.sin(time * 3 + i * 1.8);
-    const r = radius + noiseOffset;
+    // Idle breathing animation - slow organic movement that's always active
+    const idleOffset = idleNoise * (
+      Math.sin(time * 1.2 + i * 0.9) * 0.6 +
+      Math.sin(time * 2.1 + i * 1.4) * 0.4
+    );
+    // Movement noise - additional wobble when moving
+    const moveOffset = noise * Math.sin(time * 3 + i * 1.8);
+    const r = radius + idleOffset + moveOffset;
     points.push({
       x: Math.cos(angle) * r,
       y: Math.sin(angle) * r,
@@ -365,12 +371,13 @@ export default function BlobCursor() {
       }
       scale.current += (targetScale.current - scale.current) * Math.min(0.12 * baseLerp, 1);
 
-      // Generate blob with noise only when moving
+      // Generate blob with continuous idle animation + extra noise when moving
       const speed = Math.sqrt(velocity.current.x ** 2 + velocity.current.y ** 2);
-      const noiseAmount = speed > 1 ? 2 : 0; // No noise when stationary
+      const moveNoise = Math.min(speed / 10, 2.5); // Extra wobble based on speed
+      const idleNoise = 1.8; // Always-on organic breathing
       
       const radius = BASE_RADIUS * scale.current;
-      let points = generateCirclePoints(NUM_POINTS, radius, noiseAmount, time.current);
+      let points = generateCirclePoints(NUM_POINTS, radius, moveNoise, time.current, idleNoise);
       points = deformPoints(points, velocity.current.x, velocity.current.y);
 
       const path = generateBlobPath(points);

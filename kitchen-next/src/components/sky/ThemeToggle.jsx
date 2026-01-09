@@ -52,6 +52,7 @@ export default function ThemeToggle() {
       const storedMagnet = localStorage.getItem(MAGNET_KEY);
       const storedCursor = localStorage.getItem(CURSOR_KEY);
       const storedCursorContrast = localStorage.getItem(CURSOR_CONTRAST_KEY);
+      // If no stored theme, keep the one set by inline script (from system preference)
       if (storedTheme) setTheme(storedTheme);
       if (storedPalette) setPalette(storedPalette);
       if (storedVideo !== null) setVideoEnabled(storedVideo === "true");
@@ -59,6 +60,11 @@ export default function ThemeToggle() {
       if (storedCursor) setCursorMode(storedCursor);
       if (storedCursorContrast !== null) setCursorContrast(storedCursorContrast === "true");
     } catch {}
+    
+    // Enable smooth transitions after initial render (prevents FOUC)
+    requestAnimationFrame(() => {
+      document.documentElement.dataset.themeReady = "true";
+    });
   }, []);
 
   useEffect(() => {

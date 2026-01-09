@@ -34,10 +34,14 @@ export default function RootLayout({ children }) {
         <script
           dangerouslySetInnerHTML={{
             __html: `(function(){try{
-              var t=localStorage.getItem('sky-theme');
+              var saved=localStorage.getItem('sky-theme');
               var p=localStorage.getItem('sky-palette');
-              if(!t){t=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'}
-              document.documentElement.dataset.theme=t||'dark';
+              var theme=saved;
+              if(!theme){
+                var systemDark=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches;
+                theme=systemDark?'dark':'light';
+              }
+              document.documentElement.dataset.theme=theme;
               document.documentElement.dataset.palette=p||'mono';
             }catch(e){}})();`,
           }}
