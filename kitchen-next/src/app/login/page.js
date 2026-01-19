@@ -175,21 +175,7 @@ export default function LoginPage() {
       <button
         onClick={handleGoogleLogin}
         disabled={loading}
-        style={{
-          width: "100%",
-          padding: 12,
-          fontSize: 16,
-          backgroundColor: "#fff",
-          color: "#333",
-          border: "1px solid #ddd",
-          borderRadius: 4,
-          cursor: loading ? "not-allowed" : "pointer",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          gap: 10,
-          marginBottom: 20,
-        }}
+        className="w-full p-3 text-base bg-[var(--sky-surface)] text-[var(--sky-fg)] border border-[var(--sky-border)] rounded flex items-center justify-center gap-2.5 mb-5 hover:bg-[var(--sky-surface2)] disabled:cursor-not-allowed"
       >
         <svg width="18" height="18" viewBox="0 0 24 24">
           <path
@@ -213,10 +199,10 @@ export default function LoginPage() {
       </button>
 
       {/* Divider */}
-      <div style={{ display: "flex", alignItems: "center", margin: "20px 0" }}>
-        <div style={{ flex: 1, height: 1, backgroundColor: "#ddd" }} />
-        <span style={{ padding: "0 12px", color: "#888", fontSize: 14 }}>or</span>
-        <div style={{ flex: 1, height: 1, backgroundColor: "#ddd" }} />
+      <div className="flex items-center my-5">
+        <div className="flex-1 h-px bg-[var(--sky-border)]" />
+        <span className="px-3 text-sm text-[var(--sky-muted)]">or</span>
+        <div className="flex-1 h-px bg-[var(--sky-border)]" />
       </div>
 
       {/* Email OTP */}
@@ -227,14 +213,7 @@ export default function LoginPage() {
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           required
-          style={{
-            width: "100%",
-            padding: 12,
-            marginBottom: 12,
-            fontSize: 16,
-            border: "1px solid #ccc",
-            borderRadius: 4,
-          }}
+          className="w-full p-3 mb-3 text-base border border-[var(--sky-border)] rounded bg-[var(--sky-surface)] text-[var(--sky-fg)] placeholder:text-[var(--sky-muted)]"
         />
         <button
           type="submit"

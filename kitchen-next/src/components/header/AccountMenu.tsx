@@ -312,11 +312,11 @@ export default function AccountMenu() {
     return (
       <Link
         href="/login"
-        className="flex items-center gap-2 border border-[var(--sky-header-border)] px-3 py-2 text-xs font-medium tracking-[0.04em] text-[var(--sky-header-muted)] transition hover:text-[var(--sky-header-fg)] hover:border-[var(--sky-header-fg)]"
+        className="flex items-center gap-2 px-3 py-2 text-[var(--sky-fg)] transition-all hover:bg-[var(--sky-header-fg)]/[0.03]"
         style={{ borderRadius: 2 }}
         data-cursor-magnetic
       >
-        <UserIcon className="h-4 w-4" />
+        <UserIcon className="h-5 w-5" />
         <span className="hidden sm:inline">Увійти</span>
       </Link>
     );
