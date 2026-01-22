@@ -9,7 +9,7 @@ export default function FPSCounter() {
   const lastTime = useRef(performance.now());
 
   useEffect(() => {
-    let animationId;
+    let animationId: number;
 
     const updateFPS = () => {
       frameCount.current++;
@@ -64,4 +64,3 @@ export default function FPSCounter() {
     </div>
   );
 }
-

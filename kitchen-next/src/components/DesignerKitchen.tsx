@@ -4,7 +4,7 @@ import React, { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { useFrame } from "@react-three/fiber";
 import { useGLTF } from "@react-three/drei";
-import { useAntiShimmer } from "./useAntiShimer";
+import { useAntiShimmer } from "@/hooks/useAntiShimmer";
 
 // -------- texture cache (avoid reloading same URLs across changes)
 const TEX_CACHE = new Map(); // url -> Promise<THREE.Texture> | THREE.Texture

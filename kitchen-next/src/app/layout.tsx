@@ -8,7 +8,7 @@ import RouteProgress from "@/components/sky/RouteProgress";
 import FluidCursor from "@/components/sky/FluidCursor";
 import BackToTop from "@/components/sky/BackToTop";
 import { Analytics } from "@vercel/analytics/react";
-import FPSCounter from "@/components/FPSCounter";
+import FPSCounter from "@/components/dev/FPSCounter";
 import DevTools from "@/components/dev/DevTools";
 import { CartProvider } from "@/contexts/CartContext";
 import CartDrawer from "@/components/cart/CartDrawer";
